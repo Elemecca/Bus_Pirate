@@ -163,7 +163,7 @@ typedef unsigned char BYTE;
 	//#define BP_USE_I2C
 	//#define BP_USE_I2C_HW
 	//#define BP_USE_HWSPI //hardware spi
-	//#define BP_USE_RAW2WIRE
+	#define BP_USE_RAW2WIRE
 	//#define BP_USE_RAW3WIRE
 	//#define BP_USE_PCATKB
 	//#define BP_USE_LCD // include HD44780 LCD library
