@@ -53,6 +53,7 @@
       <itemPath>../usb_lang.h</itemPath>
       <itemPath>../usb_stack.h</itemPath>
       <itemPath>../1wire_lib.h</itemPath>
+      <itemPath>../iso7816.h</itemPath>
     </logicalFolder>
     <logicalFolder name="LibraryFiles"
                    displayName="Library Files"
@@ -105,6 +106,7 @@
       <itemPath>../1wire_lib.c</itemPath>
       <itemPath>../OpenOCD.c</itemPath>
       <itemPath>../OpenOCD_asm.S</itemPath>
+      <itemPath>../iso7816.c</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"

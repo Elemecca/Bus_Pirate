@@ -66,6 +66,9 @@
 #ifdef BP_USE_DIO
 	#include "dio.h"
 #endif
+#ifdef BP_USE_ISO7816
+        #include "iso7816.h"
+#endif
 
 extern struct _bpConfig bpConfig;
 extern struct _modeConfig modeConfig;
@@ -379,6 +382,30 @@ proto protos[MAXPROTO] = {
 	HiZpins,
 	HiZsettings,
 	"DIO" 					// name
+}
+#endif
+#ifdef BP_USE_ISO7816
+,
+{	ISO7816start,				// start
+	ISO7816start,				// startR
+	ISO7816stop,				// stop
+	ISO7816stop,				// stopR
+	ISO7816write,				// send
+	ISO7816read,				// read
+	nullfunc1,				// clkh
+	nullfunc1,				// clkl
+	nullfunc1,				// dath
+	nullfunc1,				// datl
+	nullfunc3,				// dats
+	nullfunc1,				// clk
+	nullfunc3,				// bitr
+	ISO7816periodic,           		// periodic
+	ISO7816macro,				// macro
+	ISO7816setup,				// setup
+	ISO7816cleanup,    			// cleanup
+	ISO7816pins,
+	ISO7816settings,
+	"7816"                          	// name
 }
 #endif
 

@@ -44,7 +44,7 @@ typedef unsigned char BYTE;
 // FIRMWARE VERSION STRING
 // Build Firmware Version String
 // used in 'i' and startup
-#define BP_FIRMWARE_STRING "Firmware v6.1 r1676 "
+#define BP_FIRMWARE_STRING "Firmware v6.1 dev "
 
 
 ////////////////////////////////////////
@@ -63,9 +63,9 @@ typedef unsigned char BYTE;
 // BP_MAIN is the default mode setting; varys by hardware version
 // BP_ADDONS is for special builds with special modes
 // BP_CUSTOM is for selecting your own modes below (find: BP_CUSTOM) and uncomment wanted modes
-#define BP_MAIN
+//#define BP_MAIN
 //#define BP_ADDONS
-//#define BP_CUSTOM
+#define BP_CUSTOM
 
 
 ////////////////////////////////////////
@@ -169,6 +169,7 @@ typedef unsigned char BYTE;
 	//#define BP_USE_LCD // include HD44780 LCD library
 	//#define BP_USE_PIC
 	//#define BP_USE_DIO //binary mode
+        #define BP_USE_ISO7816 // ISO 7816 smart card
 
 #else
 #error "No Bus Pirate configuration defined."

@@ -48,6 +48,9 @@ typedef enum
 #ifdef BP_USE_DIO
 	DIO,
 #endif
+#ifdef BP_USE_ISO7816
+        ISO7816,
+#endif
 	MAXPROTO
 } protocol_t;
 
