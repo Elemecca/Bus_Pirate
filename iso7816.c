@@ -17,6 +17,64 @@
 
 #ifdef BP_USE_ISO7816
 
+/** Prescaler ratios for the SPI clock generator.
+ * The numbers in the identifiers are frequency in KHz.
+ */
+enum sc_sck_prescale {
+    SC_SCK_2000 = 0,
+    SC_SCK_2286 = 1,
+    SC_SCK_2666 = 2,
+    SC_SCK_3200 = 3,
+    SC_SCK_4000 = 4,
+    SC_SCK_5333 = 5,
+    SC_SCK_8000 = 6,
+};
+
+/** Sets up SPI module 1 as a clock generator on CLK.
+ * 
+ * When the SPI module is set to framed master mode its clock runs
+ * continuously. The Peripheral Pin Select feature allows us to connect
+ * just its clock output and ignore its other pins. That gives us a
+ * clock output prescaled at 1:2,1:3..1:8 from the instruction clock
+ * without bothering the CPU. See PIC24F FRM 23.3.4.1 for details.
+ * 
+ * @param prescale the prescaler ratio to use
+ */
+void scSCKSetup (enum sc_sck_prescale prescale) {
+    SPI1STAT            = 0;            // reset SPI module
+    SPI1CON1            = 0;            // "
+    SPI1CON2            = 0;            // "
+    SPI1CON1bits.MSTEN  = 1;            // enable master mode
+    SPI1CON2bits.FRMEN  = 1;            // enable framed mode
+    SPI1CON1bits.PPRE   = 3;            // primary   prescaler 1:1
+    SPI1CON1bits.SPRE   = prescale;     // secondary prescaler
+    IFS0bits.SPI1IF     = 0;            // disable SPI interrupt
+    IEC0bits.SPI1IE     = 0;            // "
+    IPC2bits.SPI1IP     = 0;            // "
+    BP_CLK_RPOUT        = SCK1OUT_IO;   // connect SP1 SCK output to CLK
+    BP_CLK_DIR          = 0;            // configure CLK as output
+}
+
+/** Cleans up after the SPI clock generator.
+ * @see scSCKSetup
+ */
+void scSCKCleanup (void) {
+    // SPI module 1 was clock output
+    SPI1STAT        = 0; // reset SPI module
+    SPI1CON1        = 0; // "
+    SPI1CON2        = 0; // "
+    BP_CLK_DIR      = 1; // configure CLK as input
+    BP_CLK_RPOUT    = 0; // disconnect CLK
+}
+
+/** Starts or stops the SPI clock generator.
+ * @param enable whether the clock generator should be running
+ * @see scSCKSetup
+ */
+void scSCKEnable (int enable) {
+    SPI1STATbits.SPIEN = enable & 1;
+}
+
 void ISO7816Process (void) {
 
 }
@@ -30,46 +88,11 @@ unsigned int ISO7816read (void) {
 }
 
 void ISO7816setup (void) {
-    // set up SPI module 1 for clock output
-    SPI1STAT            = 0;            // reset SPI module
-    SPI1CON1            = 0;            // "
-    SPI1CON2            = 0;            // "
-    SPI1CON1bits.MSTEN  = 1;            // enable master mode
-    SPI1CON2bits.FRMEN  = 1;            // enable framed mode
-    SPI1CON1bits.PPRE   = 3;            // primary   prescale 1:1
-    SPI1CON1bits.SPRE   = 4;            // secondary prescale 1:4 = 4 MHz
-    IFS0bits.SPI1IF     = 0;            // disable SPI interrupt
-    IEC0bits.SPI1IE     = 0;            // "
-    IPC2bits.SPI1IP     = 0;            // "
-    BP_CLK_RPOUT        = SCK1OUT_IO;   // connect SP1 SCK output to CLK
-    BP_CLK_DIR          = 0;            // configure CLK as output
-
-    /* When the SPI module is set to framed master mode its clock runs
-     * continuously. The Peripheral Pin Select feature allows us to connect
-     * just its clock output and ignore its other pins. That gives us a
-     * clock output prescaled at 1:2,1:3..1:8 from the instruction clock
-     * without bothering the CPU. See PIC24F FRM 23.3.4.1 for details.
-     *
-     * secondary prescaler values:
-     *   0  1:8  2.00 MHz
-     *   1  1:7  2.28 MHz
-     *   2  1:6  2.66 MHz
-     *   3  1:5  3.20 MHz
-     *   4  1:4  4.00 MHz
-     *   5  1:3  5.33 MHz
-     *   6  1:2  8.00 MHz
-     *   7  1:1  invalid, malformed wave
-     * (assumes 16 MHz instruction clock and 1:1 primary prescaler)
-     */
+    
 }
 
 void ISO7816cleanup (void) {
-    // SPI module 1 was clock output
-    SPI1STAT        = 0; // reset SPI module
-    SPI1CON1        = 0; // "
-    SPI1CON2        = 0; // "
-    BP_CLK_DIR      = 1; // configure CLK as input
-    BP_CLK_RPOUT    = 0; // disconnect CLK
+
 }
 
 void ISO7816macro (unsigned int c) {
@@ -77,11 +100,11 @@ void ISO7816macro (unsigned int c) {
 }
 
 void ISO7816start (void) {
-    SPI1STATbits.SPIEN = 1;
+    
 }
 
 void ISO7816stop (void) {
-    SPI1STATbits.SPIEN = 0;
+
 }
 
 unsigned int ISO7816periodic (void) {
