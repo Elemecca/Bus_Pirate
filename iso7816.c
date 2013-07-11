@@ -30,28 +30,46 @@ unsigned int ISO7816read (void) {
 }
 
 void ISO7816setup (void) {
-    // set up timer 2 for clock output
-    T2CON           = 0;    // disable the timer
-    TMR2            = 0;    // clear the timer register
-    PR2             = 1;    // period of 1 at 16 MHz = 4 MHz
-    IFS0bits.T2IF   = 0;    // disable the timer interrupt
-    IEC0bits.T2IE   = 0;    // "
-    IPC1bits.T2IP   = 0;    // "
+    // set up SPI module 1 for clock output
+    SPI1STAT            = 0;            // reset SPI module
+    SPI1CON1            = 0;            // "
+    SPI1CON2            = 0;            // "
+    SPI1CON1bits.MSTEN  = 1;            // enable master mode
+    SPI1CON2bits.FRMEN  = 1;            // enable framed mode
+    SPI1CON1bits.PPRE   = 3;            // primary   prescale 1:1
+    SPI1CON1bits.SPRE   = 4;            // secondary prescale 1:4 = 4 MHz
+    IFS0bits.SPI1IF     = 0;            // disable SPI interrupt
+    IEC0bits.SPI1IE     = 0;            // "
+    IPC2bits.SPI1IP     = 0;            // "
+    BP_CLK_RPOUT        = SCK1OUT_IO;   // connect SP1 SCK output to CLK
+    BP_CLK_DIR          = 0;            // configure CLK as output
 
-    // set up output comparator 5 for clock output
-    BP_CLK_RPOUT    = OC5_IO;   // output on CLK pin
-    OC5CON          = 0x0001;   // initial low, use timer 2, prescaler 1:1
-    OC5CONbits.OCM1 = 1;        // enable toggle mode
-    OC5R            = PR2;      // OCxR = PRx toggles once per period
-    IFS2bits.OC5IF  = 0;        // disable the comparator interrupt
-    IEC2bits.OC5IE  = 0;        // "
-    IPC10bits.OC5IP = 0;        // "
+    /* When the SPI module is set to framed master mode its clock runs
+     * continuously. The Peripheral Pin Select feature allows us to connect
+     * just its clock output and ignore its other pins. That gives us a
+     * clock output prescaled at 1:2,1:3..1:8 from the instruction clock
+     * without bothering the CPU. See PIC24F FRM 23.3.4.1 for details.
+     *
+     * secondary prescaler values:
+     *   0  1:8  2.00 MHz
+     *   1  1:7  2.28 MHz
+     *   2  1:6  2.66 MHz
+     *   3  1:5  3.20 MHz
+     *   4  1:4  4.00 MHz
+     *   5  1:3  5.33 MHz
+     *   6  1:2  8.00 MHz
+     *   7  1:1  invalid, malformed wave
+     * (assumes 16 MHz instruction clock and 1:1 primary prescaler)
+     */
 }
 
 void ISO7816cleanup (void) {
-    T2CON           = 0;
-    OC5CON          = 0;
-    BP_CLK_RPOUT    = 0;
+    // SPI module 1 was clock output
+    SPI1STAT        = 0; // reset SPI module
+    SPI1CON1        = 0; // "
+    SPI1CON2        = 0; // "
+    BP_CLK_DIR      = 1; // configure CLK as input
+    BP_CLK_RPOUT    = 0; // disconnect CLK
 }
 
 void ISO7816macro (unsigned int c) {
@@ -59,11 +77,11 @@ void ISO7816macro (unsigned int c) {
 }
 
 void ISO7816start (void) {
-    T2CONbits.TON = 1;
+    SPI1STATbits.SPIEN = 1;
 }
 
 void ISO7816stop (void) {
-    T2CONbits.TON = 0;
+    SPI1STATbits.SPIEN = 0;
 }
 
 unsigned int ISO7816periodic (void) {
