@@ -19,7 +19,7 @@
     .equ INTTREG, #0x00E0
 .endif
 
-.data
+.section .ndata, data, near
 
 ; the interrupt handler table
 .global _interrupt_table
@@ -48,7 +48,8 @@ __DefaultInterrupt:
     mov INTTREG, w0
     and #0x007F, w0             ; mask for VECNUM
     add w0, w0, w0              ; multipy index by two to get entry offset
-    add #_interrupt_table, w0    ; add base address of table
+    mov #_interrupt_table, w1   ; add base address of table
+    add w1, w0, w0              ; "
 
     ; load and check the ISR address
     ; instructions are word-aligned, so pointers always have bit 0 clear
