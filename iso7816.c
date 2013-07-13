@@ -115,10 +115,18 @@ unsigned int ISO7816read (void) {
 }
 
 
-void ISR_RT isr_cn (void) {
+void ISR_RT isr_input (void) {
     IFS1bits.CNIF = 0;
 
-    if (!SC_HRST && SC_CLK) {
+    // received soft reset, go back to BRGH calculation
+    if (SC_HRST_CN && !SC_HRST) {
+        U2MODEbits.UARTEN   = 0;
+        SC_HRST_CN          = 0;
+        SC_CLK_CN           = 1;
+    }
+
+    // clock started; beginning of reset sequence
+    if (SC_CLK_CN && SC_CLK && !SC_HRST) {
         SC_CLK_CN = 0;
 
         T2CONbits.TON   = 0;
@@ -132,16 +140,17 @@ void ISR_RT isr_cn (void) {
     }
 }
 
-int baud_internal, baud_external;
-
-void ISR_RT isr_t2 (void) {
+void ISR_RT isr_timer (void) {
     IFS0bits.T2IF = 0;
-
-    baud_internal = TMR3;
-    baud_external = TMR2 + PR2;
 
     T3CONbits.TON = 0;
     T2CONbits.TON = 0;
+
+    U2BRG = (int)( 93.0 * (double)TMR3 / (double)(TMR2 + PR2) + 1.0 );
+    U2MODEbits.UARTEN = 1;
+
+    // listen for soft reset;
+    SC_HRST_CN = 1;
 }
 
 void ISO7816setup (void) {
@@ -153,11 +162,20 @@ void ISO7816setup (void) {
     SC_HRST_DIR = 1;
     SC_HIO_DIR  = 1;
 
+    // set up UART 2 on host IO
+    U2MODE              = 0;            // reset the UART
+    U2STA               = 0;            // "
+    U2MODEbits.BRGH     = 1;            // use BRG factor for high baud rates
+    U2MODEbits.PDSEL    = 1;            // 8 bits, even parity
+    U2MODEbits.STSEL    = 1;            // 2 stop bits
+    RPINR19bits.U2RXR   = SC_HIO_RPIN;  // connect pin to Rx input
+    //SC_HIO_RPOUT        = U2TX_IO;      // connect pin to Tx output
+
     // set up timer 1 as synchronous counter on CLK
     T2CON               = 0;            // reset the timer
     T2CONbits.TCS       = 1;            // enable external sync
     RPINR3bits.T2CKR    = SC_CLK_RPIN;  // connect clock input to CLK
-    ISR_T2              = isr_t2;       // set up ISR
+    ISR_T2              = isr_timer;    // set up ISR
     IFS0bits.T2IF       = 0;            // clear interrupt flag
     IPC1bits.T2IP       = 7;            // maximum interrupt priority
     IEC0bits.T2IE       = 1;            // enable interrupts
@@ -170,7 +188,7 @@ void ISO7816setup (void) {
 
 
     // set up port change notification interrupts
-    ISR_CN              = isr_cn;   // set up CN ISR
+    ISR_CN              = isr_input;// set up CN ISR
     IFS1bits.CNIF       = 0;        // clear the CN interrupt flag
     IPC4bits.CNIP       = 6;        // RST changes are timing-critical so use
                                     //   priority 6, timers are at 7
@@ -199,6 +217,11 @@ void ISO7816cleanup (void) {
     // shut down timer 3
     T3CON               = 0;
 
+    // disconnect UART 2 from host IO
+    U2MODE              = 0;        // reset the UART
+    RPINR19bits.U2RXR   = 0xFF;     // disconnect Rx input
+    SC_HIO_RPOUT        = 0;        // disconnect Tx output
+
     // reset IO pins
     SC_HRST_CN      = 0;
     SC_HIO_CN       = 0;
@@ -212,8 +235,11 @@ void ISO7816macro (unsigned int c) {
 
 }
 
+int once_flag = 0;
+
 void ISO7816start (void) {
     SC_CLK_CN = 1;
+    once_flag = 0;
 
     modeConfig.periodicService = 1;
 }
@@ -221,25 +247,35 @@ void ISO7816start (void) {
 void ISO7816stop (void) {
     T2CONbits.TON   = 0;
     T3CONbits.TON   = 0;
+    SC_HRST_CN      = 0;
     SC_CLK_CN       = 0;
 
     modeConfig.periodicService = 0;
 }
 
 unsigned int ISO7816periodic (void) {
-    if (baud_internal) {
-        bpWstring( "counters: " );
-        bpWintdec( baud_internal );
-        bpWstring( " " );
-        bpWintdec( baud_external );
+    if (!once_flag && U2BRG) {
+        bpWstring( "BRGH " );
+        bpWintdec( U2BRG );
         bpWline("");
+        once_flag = 1;
+    }
+    
+    if (U2STAbits.URXDA) {
+        int status = U2STA;
 
-        int brg = (int)( 93.0 * (double)baud_internal / (double)baud_external + 1.0 );
-        bpWstring( "BRGH: " );
-        bpWintdec( brg );
+        bpWstring( "Received " );
+        bpWhex( U2RXREG );
+
+        if (status & 0xC) {
+            bpWstring( " p f" );
+        } else if (status & 0x8) {
+            bpWstring( " p" );
+        } else if (status & 0x4) {
+            bpWstring( "   f" );
+        }
+
         bpWline("");
-
-        baud_internal = 0;
     }
 
     return 0;
