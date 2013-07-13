@@ -72,6 +72,11 @@
 //Change notice assignment
 #define BP_MOSI_CN		CNEN2bits.CN21IE
 #define BP_CLK_CN		CNEN2bits.CN22IE
+#define BP_MISO_CN              CNEN2bits.CN23IE
+#define BP_CS_CN                CNEN2bits.CN24IE
+#define BP_AUX_CN               CNEN2bits.CN16IE
+#define BP_ADC_CN               CNEN1bits.CN14IE
+#define BP_VPU_CN               CNEN1bits.CN13IE
 
 //ADC assignment
 #define BP_ADC_PROBE 12

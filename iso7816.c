@@ -1,5 +1,6 @@
 /*
- * This file is part of the Bus Pirate project (http://code.google.com/p/the-bus-pirate/).
+ * This file is part of the Bus Pirate project.
+ * http://code.google.com/p/the-bus-pirate/
  *
  * Written and maintained by the Bus Pirate project.
  *
@@ -7,15 +8,20 @@
  * waived all copyright and related or neighboring rights to Bus Pirate. This
  * work is published from United States.
  *
- * For details see: http://creativecommons.org/publicdomain/zero/1.0/.
+ * For details see: http://creativecommons.org/publicdomain/zero/1.0/
  *
  *    This program is distributed in the hope that it will be useful,
  *    but WITHOUT ANY WARRANTY; without even the implied warranty of
  *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
+
 #include "base.h"
 
 #ifdef BP_USE_ISO7816
+
+#include "interrupts.h"
+
+extern struct _modeConfig modeConfig;
 
 /** Prescaler ratios for the SPI clock generator.
  * The numbers in the identifiers are frequency in KHz.
@@ -87,12 +93,45 @@ unsigned int ISO7816read (void) {
     return 0;
 }
 
+int sc_reset_flag   = 0;
+int sc_reset        = 0;
+
+void ISR_RT isr_cn (void) {
+    IFS1bits.CNIF = 0;
+
+    // detect RST being asserted
+    if (sc_reset != BP_CS) {
+        sc_reset = BP_CS;
+        sc_reset_flag = 1;
+    }
+}
+
 void ISO7816setup (void) {
-    
+    // IO pins are open collector
+    modeConfig.HiZ = 1;
+
+    // set up CS as RST input
+    BP_CS_DIR           = 1;        // configure CS as input
+
+    // set up port change notification interrupts
+    ISR_CN              = isr_cn;   // set up CN ISR
+    IFS1bits.CNIF       = 0;        // clear the CN interrupt flag
+    IPC4bits.CNIP       = 6;        // RST changes are timing-critical so use
+                                    //   priority 6, timers are at 7
+    IEC1bits.CNIE       = 1;        // enable CN interrupts
 }
 
 void ISO7816cleanup (void) {
 
+    // disable CN interrupts
+    IFS1bits.CNIF       = 0;
+    IEC1bits.CNIE       = 0;
+    IPC4bits.CNIP       = 0;
+    ISR_CN              = NULL_ISR;
+
+    // disconnect RST on CS
+    BP_CS_DIR           = 1;    // configure as input
+    BP_CS_CN            = 0;    // disable change notification
 }
 
 void ISO7816macro (unsigned int c) {
@@ -100,19 +139,31 @@ void ISO7816macro (unsigned int c) {
 }
 
 void ISO7816start (void) {
-    
+    modeConfig.periodicService = 1;
+
+    // enable RST change notification
+    BP_CS_CN = 1;
 }
 
 void ISO7816stop (void) {
+    // disable RST change notification
+    BP_CS_CN = 0;
 
+    modeConfig.periodicService = 0;
 }
 
 unsigned int ISO7816periodic (void) {
+    if (sc_reset_flag) {
+        sc_reset_flag = 0;
+        if (sc_reset) bpWline( "RST asserted" );
+        else bpWline( "RST cleared" );
+    }
+
     return 0;
 }
 
 void ISO7816pins (void) {
-    bpWline( "CLK\t-\t-\t-" );
+    bpWline( "CLK\t-\tRST\tI/O" );
 }
 
 void ISO7816settings (void) {

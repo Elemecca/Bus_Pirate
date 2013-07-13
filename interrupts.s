@@ -27,7 +27,7 @@ _interrupt_table: .fill 118, 2, 0xFFFF
 
 .section .isr, code
 
-; At present the trampoline takes nine cycles. That could be reduced to six
+; At present the trampoline takes eleven cycles. That could be reduced to six
 ; by using a jump table instead of calculating the address of the IVT entry
 ; at runtime. Each row of the jump table would be:
 ;     push.s      ; matching pop.s is in ISR prologue
@@ -47,6 +47,7 @@ __DefaultInterrupt:
     ; compute address of interrupt table entry
     mov INTTREG, w0
     and #0x007F, w0             ; mask for VECNUM
+    sub #8, w0                  ; compensate for the traps
     add w0, w0, w0              ; multipy index by two to get entry offset
     mov #_interrupt_table, w1   ; add base address of table
     add w1, w0, w0              ; "
