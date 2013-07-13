@@ -114,99 +114,59 @@ unsigned int ISO7816read (void) {
     return 0;
 }
 
-int sc_reset_flag   = 0;
-int sc_reset        = 0;
-
-struct sc_recv_t {
-  union {
-    struct {
-        unsigned value  :8;
-        unsigned parity :1;
-        unsigned frame  :1;
-        unsigned ready  :1;
-        unsigned _res   :1;
-        unsigned index  :4;
-    };
-    struct {
-        unsigned int reset;
-    };
-  };
-};
-
-int sc_recv_read, sc_recv_write;
-struct sc_recv_t sc_recv, sc_recv_buffer[ 10 ];
 
 void ISR_RT isr_cn (void) {
     IFS1bits.CNIF = 0;
 
-    // detect RST being asserted
-    if (sc_reset != SC_HRST) {
-        sc_reset = SC_HRST;
-        sc_reset_flag = 1;
-    }
+    if (!SC_HRST && SC_CLK) {
+        SC_CLK_CN = 0;
 
-    // detect start bit
-    if (SC_HIO) {
-        SC_HIO_CN = 0;
-
-        sc_recv.reset = 0;
-
-        TMR2 = PR2 / 2;
-        T2CONbits.TON = 1;
+        T2CONbits.TON   = 0;
+        T3CONbits.TON   = 0;
+        TMR2            = 0;
+        TMR3            = 0;
+        PR2             = 700;
+        PR3             = 0xFFFF;
+        T2CONbits.TON   = 1;
+        T3CONbits.TON   = 1;
     }
 }
+
+int baud_internal, baud_external;
 
 void ISR_RT isr_t2 (void) {
     IFS0bits.T2IF = 0;
 
-    if (0 == sc_recv.index) {
-        // confirm start bit
-        if (!SC_HIO) {
-            sc_recv.reset = 0;
-            T2CONbits.TON = 0;
-            SC_HIO_CN = 1;
-            return;
-        }
-    } else if (sc_recv.index < 9) {
-        // receive data bit
-        sc_recv.value = (sc_recv.value << 1) | SC_HIO;
-        sc_recv.parity ^= SC_HIO;
-    } else if (9 == sc_recv.index) {
-        // receive parity bit
-        sc_recv.parity ^= SC_HIO;
-    } else {
-        // receive stop bit
-        sc_recv.frame |= SC_HIO;
-    }
+    baud_internal = TMR3;
+    baud_external = TMR2 + PR2;
 
-    if (sc_recv.index > 10) {
-        sc_recv.ready = 1;
-        sc_recv.index = 0;
-
-        sc_recv_buffer[ sc_recv_write ] = sc_recv;
-        sc_recv_write = (sc_recv_write + 1) % 10;
-
-        T2CONbits.TON = 0;
-        SC_HIO_CN = 1;
-    } else {
-        sc_recv.index++;
-    }
+    T3CONbits.TON = 0;
+    T2CONbits.TON = 0;
 }
 
 void ISO7816setup (void) {
     // IO pins are open collector
     modeConfig.HiZ = 1;
 
-    // set up timer 2 as interval timer on CLK
+    // set up pin modes
+    SC_CLK_DIR  = 1;
+    SC_HRST_DIR = 1;
+    SC_HIO_DIR  = 1;
+
+    // set up timer 1 as synchronous counter on CLK
     T2CON               = 0;            // reset the timer
     T2CONbits.TCS       = 1;            // enable external sync
-    SC_CLK_DIR          = 1;            // configure CLK as input
     RPINR3bits.T2CKR    = SC_CLK_RPIN;  // connect clock input to CLK
-    ISR_T2              = isr_t2;
+    ISR_T2              = isr_t2;       // set up ISR
     IFS0bits.T2IF       = 0;            // clear interrupt flag
-    IPC1bits.T2IP       = 7;
-    IEC0bits.T2IE       = 1;
-    PR2                 = 372;
+    IPC1bits.T2IP       = 7;            // maximum interrupt priority
+    IEC0bits.T2IE       = 1;            // enable interrupts
+
+    // set up timer 3 as timer
+    T3CON               = 0;            // reset the timer
+    IFS0bits.T3IF       = 0;            // disable interrupts
+    IPC2bits.T3IP       = 0;            // "
+    IEC0bits.T3IE       = 0;            // "
 
 
     // set up port change notification interrupts
@@ -215,11 +175,11 @@ void ISO7816setup (void) {
     IPC4bits.CNIP       = 6;        // RST changes are timing-critical so use
                                     //   priority 6, timers are at 7
     IEC1bits.CNIE       = 1;        // enable CN interrupts
+
 }
 
 void ISO7816cleanup (void) {
-    sc_recv.reset = 0;
-
+    
     // disable CN interrupts
     IFS1bits.CNIF       = 0;
     IEC1bits.CNIE       = 0;
@@ -236,11 +196,16 @@ void ISO7816cleanup (void) {
     PR2                 = 0;        // "
     RPINR3bits.T2CKR    = 0;        // disconnect clock input
 
+    // shut down timer 3
+    T3CON               = 0;
+
     // reset IO pins
     SC_HRST_CN      = 0;
     SC_HIO_CN       = 0;
+    SC_CLK_CN       = 0;
     SC_HRST_DIR     = 1;
     SC_HIO_DIR      = 1;
+    SC_CLK_DIR      = 1;
 }
 
 void ISO7816macro (unsigned int c) {
@@ -248,43 +213,33 @@ void ISO7816macro (unsigned int c) {
 }
 
 void ISO7816start (void) {
+    SC_CLK_CN = 1;
+
     modeConfig.periodicService = 1;
-
-    sc_recv_read = 0;
-    sc_recv_write = 0;
-
-    SC_HRST_CN  = 1;
-    SC_HIO_CN   = 1;
 }
 
 void ISO7816stop (void) {
-    SC_HRST_CN      = 0;
-    SC_HIO_CN       = 0;
     T2CONbits.TON   = 0;
-    sc_recv.reset   = 0;
+    T3CONbits.TON   = 0;
+    SC_CLK_CN       = 0;
 
     modeConfig.periodicService = 0;
 }
 
 unsigned int ISO7816periodic (void) {
-    if (sc_reset_flag) {
-        sc_reset_flag = 0;
-        if (sc_reset) bpWline( "RST asserted" );
-        else bpWline( "RST cleared" );
-    }
+    if (baud_internal) {
+        bpWstring( "counters: " );
+        bpWintdec( baud_internal );
+        bpWstring( " " );
+        bpWintdec( baud_external );
+        bpWline("");
 
-    while (sc_recv_read != sc_recv_write) {
-        struct sc_recv_t recv = sc_recv_buffer[ sc_recv_read ];
+        int brg = (int)( 93.0 * (double)baud_internal / (double)baud_external + 1.0 );
+        bpWstring( "BRGH: " );
+        bpWintdec( brg );
+        bpWline("");
 
-        bpWstring( "Received " );
-        bpWhex( recv.value );
-        if (recv.parity)
-            bpWstring( " !p" );
-        if (recv.frame)
-            bpWstring( " !f" );
-        bpWline( "" );
-
-        sc_recv_read = (sc_recv_read + 1) % 10;
+        baud_internal = 0;
     }
 
     return 0;
