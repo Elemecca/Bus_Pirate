@@ -8,7 +8,6 @@
                      displayName="hardware profiles"
                      projectFiles="true">
         <itemPath>../hardwarev1a.h</itemPath>
-        <itemPath>../hardwarev4.h</itemPath>
       </logicalFolder>
       <logicalFolder name="translations"
                      displayName="translations"
@@ -54,6 +53,7 @@
       <itemPath>../usb_stack.h</itemPath>
       <itemPath>../1wire_lib.h</itemPath>
       <itemPath>../iso7816.h</itemPath>
+      <itemPath>../interrupts.h</itemPath>
     </logicalFolder>
     <logicalFolder name="LibraryFiles"
                    displayName="Library Files"
@@ -107,6 +107,7 @@
       <itemPath>../OpenOCD.c</itemPath>
       <itemPath>../OpenOCD_asm.S</itemPath>
       <itemPath>../iso7816.c</itemPath>
+      <itemPath>../interrupts.s</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
@@ -249,7 +250,7 @@
         <property key="legacy-libc" value="false"/>
         <property key="oXC16glb-macros" value=""/>
         <property key="output-file-format" value="elf"/>
-        <property key="save-temps" value="false"/>
+        <property key="save-temps" value="true"/>
       </C30Global>
       <PICkit3PlatformTool>
         <property key="ADC 1" value="true"/>
