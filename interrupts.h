@@ -21,11 +21,11 @@
 /** Runtime interrupt vector table (IVT).
  * Any interrupt whose vector is not defined at compile time will use the
  * vector defined in this table. Entries for interrupts with no vector must
- * be set to the sentinel value {@code NULL_ISR} ({@code 0xFFFF}). Interrupt
- * service routines (ISRs) must be declared as normal, except that the function
- * identifier must not start with an underbar. See the XC16 C Compiler User's
- * Guide section 10.3 for details on writing ISRs. Additionally, the first
- * instruction of the ISR must be {@code POP.S}. This can be achieved with the
+ * be set to the default vector {@code NULL_ISR}. Interrupt service routines
+ * (ISRs) must be declared as normal, except that the function identifier must
+ * not start with an underbar. See the XC16 C Compiler User's Guide s10.3 for
+ * details on writing ISRs. Additionally, the first instruction of the ISR must
+ * be {@code POP.S}. This can be achieved with the
  * {@code __preprologue__} attribute.
  *
  * Two macros have been provided for declaring ISRs. The first, {@code ISR_RT},
@@ -56,8 +56,10 @@
  */
 extern void (*interrupt_table[ 118 ])(void);
 
-/** Sentinel value for unhandled interrupts in the runtime IVT. */
-#define NULL_ISR ((void (*)(void)) 0xFFFF)
+extern void _DefaultInterrupt (void);
+
+/** Default vector for unhandled interrupts in the runtime IVT. */
+#define NULL_ISR (&_DefaultInterrupt)
 
 /** {@code __preprologue__} attribute which must be applied to runtime ISRs.
  * Must be included as an argument to the {@code __interrupt__} attribute.

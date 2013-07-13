@@ -62,6 +62,16 @@ SECTIONS
   ** Vector table source code appears below.
   */
 
+  /*
+  ** Runtime Interrupt Vector Jump Table
+  **
+  ** This should be at the top of program memory.
+  */
+  .rivjt : {
+      __RIVJT_BASE = ABSOLUTE( . );
+      KEEP( *(.rivjt) )
+  } >program
+
 
   /*
   ** User Code and Library Code
@@ -141,6 +151,15 @@ SECTIONS
   .icd __DATA_BASE (NOLOAD):
   {
     . += (DEFINED (__ICD2RAM) ? 0x50 : 0 );
+  } > data
+
+  /*
+  ** Runtime Interrupt Vector Table
+  **
+  ** Must be as close to the top of the register file as possible.
+  */
+  .rivt : {
+    KEEP( *(.rivt) );
   } > data
 
   /*
@@ -240,242 +259,243 @@ SECTIONS
     LONG( DEFINED(__ReservedTrap7)    ? ABSOLUTE(__ReservedTrap7)    :
          ABSOLUTE(__DefaultInterrupt));
 
+    __IVT_INTBASE = .;
     LONG( DEFINED(__INT0Interrupt)    ? ABSOLUTE(__INT0Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__IC1Interrupt)    ? ABSOLUTE(__IC1Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__OC1Interrupt)    ? ABSOLUTE(__OC1Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__T1Interrupt)    ? ABSOLUTE(__T1Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt4)    ? ABSOLUTE(__Interrupt4)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__IC2Interrupt)    ? ABSOLUTE(__IC2Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__OC2Interrupt)    ? ABSOLUTE(__OC2Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__T2Interrupt)    ? ABSOLUTE(__T2Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__T3Interrupt)    ? ABSOLUTE(__T3Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__SPI1ErrInterrupt)    ? ABSOLUTE(__SPI1ErrInterrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__SPI1Interrupt)    ? ABSOLUTE(__SPI1Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__U1RXInterrupt)    ? ABSOLUTE(__U1RXInterrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__U1TXInterrupt)    ? ABSOLUTE(__U1TXInterrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__ADC1Interrupt)    ? ABSOLUTE(__ADC1Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt14)    ? ABSOLUTE(__Interrupt14)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt15)    ? ABSOLUTE(__Interrupt15)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__SI2C1Interrupt)    ? ABSOLUTE(__SI2C1Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__MI2C1Interrupt)    ? ABSOLUTE(__MI2C1Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__CompInterrupt)    ? ABSOLUTE(__CompInterrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__CNInterrupt)    ? ABSOLUTE(__CNInterrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__INT1Interrupt)    ? ABSOLUTE(__INT1Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt21)    ? ABSOLUTE(__Interrupt21)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt22)    ? ABSOLUTE(__Interrupt22)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt23)    ? ABSOLUTE(__Interrupt23)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt24)    ? ABSOLUTE(__Interrupt24)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__OC3Interrupt)    ? ABSOLUTE(__OC3Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__OC4Interrupt)    ? ABSOLUTE(__OC4Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__T4Interrupt)    ? ABSOLUTE(__T4Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__T5Interrupt)    ? ABSOLUTE(__T5Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__INT2Interrupt)    ? ABSOLUTE(__INT2Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__U2RXInterrupt)    ? ABSOLUTE(__U2RXInterrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__U2TXInterrupt)    ? ABSOLUTE(__U2TXInterrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__SPI2ErrInterrupt)    ? ABSOLUTE(__SPI2ErrInterrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__SPI2Interrupt)    ? ABSOLUTE(__SPI2Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt34)    ? ABSOLUTE(__Interrupt34)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt35)    ? ABSOLUTE(__Interrupt35)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt36)    ? ABSOLUTE(__Interrupt36)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__IC3Interrupt)    ? ABSOLUTE(__IC3Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__IC4Interrupt)    ? ABSOLUTE(__IC4Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__IC5Interrupt)    ? ABSOLUTE(__IC5Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt40)    ? ABSOLUTE(__Interrupt40)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__OC5Interrupt)    ? ABSOLUTE(__OC5Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt42)    ? ABSOLUTE(__Interrupt42)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt43)    ? ABSOLUTE(__Interrupt43)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt44)    ? ABSOLUTE(__Interrupt44)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__PMPInterrupt)    ? ABSOLUTE(__PMPInterrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt46)    ? ABSOLUTE(__Interrupt46)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt47)    ? ABSOLUTE(__Interrupt47)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt48)    ? ABSOLUTE(__Interrupt48)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__SI2C2Interrupt)    ? ABSOLUTE(__SI2C2Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__MI2C2Interrupt)    ? ABSOLUTE(__MI2C2Interrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt51)    ? ABSOLUTE(__Interrupt51)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt52)    ? ABSOLUTE(__Interrupt52)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt53)    ? ABSOLUTE(__Interrupt53)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt54)    ? ABSOLUTE(__Interrupt54)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt55)    ? ABSOLUTE(__Interrupt55)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt56)    ? ABSOLUTE(__Interrupt56)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt57)    ? ABSOLUTE(__Interrupt57)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt58)    ? ABSOLUTE(__Interrupt58)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt59)    ? ABSOLUTE(__Interrupt59)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt60)    ? ABSOLUTE(__Interrupt60)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt61)    ? ABSOLUTE(__Interrupt61)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__RTCCInterrupt)    ? ABSOLUTE(__RTCCInterrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt63)    ? ABSOLUTE(__Interrupt63)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt64)    ? ABSOLUTE(__Interrupt64)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__U1ErrInterrupt)    ? ABSOLUTE(__U1ErrInterrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__U2ErrInterrupt)    ? ABSOLUTE(__U2ErrInterrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__CRCInterrupt)    ? ABSOLUTE(__CRCInterrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt68)    ? ABSOLUTE(__Interrupt68)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt69)    ? ABSOLUTE(__Interrupt69)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt70)    ? ABSOLUTE(__Interrupt70)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt71)    ? ABSOLUTE(__Interrupt71)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__LVDInterrupt)    ? ABSOLUTE(__LVDInterrupt)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt73)    ? ABSOLUTE(__Interrupt73)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt74)    ? ABSOLUTE(__Interrupt74)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt75)    ? ABSOLUTE(__Interrupt75)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt76)    ? ABSOLUTE(__Interrupt76)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt77)    ? ABSOLUTE(__Interrupt77)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt78)    ? ABSOLUTE(__Interrupt78)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt79)    ? ABSOLUTE(__Interrupt79)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt80)    ? ABSOLUTE(__Interrupt80)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt81)    ? ABSOLUTE(__Interrupt81)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt82)    ? ABSOLUTE(__Interrupt82)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt83)    ? ABSOLUTE(__Interrupt83)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt84)    ? ABSOLUTE(__Interrupt84)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt85)    ? ABSOLUTE(__Interrupt85)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt86)    ? ABSOLUTE(__Interrupt86)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt87)    ? ABSOLUTE(__Interrupt87)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt88)    ? ABSOLUTE(__Interrupt88)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt89)    ? ABSOLUTE(__Interrupt89)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt90)    ? ABSOLUTE(__Interrupt90)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt91)    ? ABSOLUTE(__Interrupt91)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt92)    ? ABSOLUTE(__Interrupt92)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt93)    ? ABSOLUTE(__Interrupt93)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt94)    ? ABSOLUTE(__Interrupt94)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt95)    ? ABSOLUTE(__Interrupt95)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt96)    ? ABSOLUTE(__Interrupt96)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt97)    ? ABSOLUTE(__Interrupt97)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt98)    ? ABSOLUTE(__Interrupt98)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt99)    ? ABSOLUTE(__Interrupt99)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt100)    ? ABSOLUTE(__Interrupt100)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt101)    ? ABSOLUTE(__Interrupt101)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt102)    ? ABSOLUTE(__Interrupt102)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt103)    ? ABSOLUTE(__Interrupt103)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt104)    ? ABSOLUTE(__Interrupt104)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt105)    ? ABSOLUTE(__Interrupt105)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt106)    ? ABSOLUTE(__Interrupt106)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt107)    ? ABSOLUTE(__Interrupt107)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt108)    ? ABSOLUTE(__Interrupt108)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt109)    ? ABSOLUTE(__Interrupt109)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt110)    ? ABSOLUTE(__Interrupt110)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt111)    ? ABSOLUTE(__Interrupt111)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt112)    ? ABSOLUTE(__Interrupt112)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt113)    ? ABSOLUTE(__Interrupt113)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt114)    ? ABSOLUTE(__Interrupt114)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt115)    ? ABSOLUTE(__Interrupt115)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt116)    ? ABSOLUTE(__Interrupt116)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
     LONG( DEFINED(__Interrupt117)    ? ABSOLUTE(__Interrupt117)    :
-         ABSOLUTE(__DefaultInterrupt));
+         (__RIVJT_BASE + (. - __IVT_INTBASE) * 3));
   } >ivt
 
 
