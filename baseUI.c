@@ -17,13 +17,24 @@
 
 extern void bpmessages(void);
 
-void bpMsg(int offset, int length)
-{	int i;
+void bpMsg(int offset, int length) {
+	int i;
+	for( i = offset; i < (offset+length); i++) {
+            /* These two variables ought to be rendered unnecessary by a decent
+             * optimizing compiler. Unfortunately a bug in XC16 v1.11 causes
+             * invalid output when optimizing away repeated division and mod
+             * operations with the same operands. The resulting symptom is that
+             * when (i % 3 == 0) the message table offset is calculated as 0
+             * and so the output is the first character of the first message in
+             * the table, currently 'W'. For details on the issue see:
+             * http://www.microchip.com/forums/fb.ashx?m=734999
+             */
+            register int mod = i % 3;
+            register int addr = (int)( &bpmessages ) + ((i / 3) << 1);
 
-	for(i=offset; i<(offset+length); i++)
-	{	if((i%3)==0)  UART1TX(__builtin_tblrdl((int)&bpmessages+((i/3)<<1))&0x00FF);
-		if((i%3)==1) UART1TX((__builtin_tblrdl((int)&bpmessages+((i/3)<<1))>>8)&0xFF);
-		if((i%3)==2)  UART1TX(__builtin_tblrdh((int)&bpmessages+((i/3)<<1))&0x00FF);
+            if (0 == mod) UART1TX( __builtin_tblrdl( addr ) & 0x00FF );
+            if (1 == mod) UART1TX((__builtin_tblrdl( addr ) >> 8) & 0xFF );
+            if (2 == mod) UART1TX( __builtin_tblrdh( addr ) & 0x00FF );
 	}
 
 }
