@@ -50,6 +50,7 @@
 #define BP_VREGEN		PORTAbits.RA0 //single vreg enable pin on v2a
 #define BP_PULLUP		PORTBbits.RB11 //Pull-up pin on V2a
 #define BP_PGD			PORTBbits.RB0 //PGD pin on programming header
+#define BP_VPU                  PORTBbits.RB13
 
 //these macros set the direction registers for each IO pin
 #define BP_MOSI_DIR 	TRISBbits.TRISB9
