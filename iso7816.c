@@ -110,12 +110,16 @@ struct sc_state_t {
 
     unsigned rate_ticks;
     unsigned rate_cycles;
+
+    unsigned reset_ack;     // tick count when device set IO high
+    unsigned reset_reset;   // tick count when host released RST
 } sc_state;
 
 
 #define SCM_NOTE_OVERFLOW   1   // the notice buffer overflowed
 #define SCM_CLK_START       2   // clock signal detected
 #define SCM_CLK_RATE        3   // new clock rate calculated
+#define SCM_RESET_ACK       4   // device acknowledged reset by setting IO high
 
 #define SC_NOTIFY_BUFFER_SIZE 32
 struct {
@@ -242,6 +246,7 @@ inline void sc_transition (unsigned new_state) {
             T3CONbits.TON       = 1; // "
             IC1CONbits.ICM      = 3; // enable clock start detection
             OC1CONbits.OCM      = 1; // enable rate calculation trigger
+            IC3CONbits.ICM      = 3; // enable reset ack detection
             break;
 
         case SCS_RESET:
@@ -304,6 +309,18 @@ void ISR_RT isr_rate (void) {
     sc_transition( SCS_ATR );
 }
 
+void ISR_RT isr_ack_rst (void) {
+    IFS2bits.IC3IF = 0;
+
+    // save the tick count when the ack came in
+    sc_state.reset_ack = IC3BUF;
+
+    // this is a one-shot, disable the trigger
+    IC3CONbits.ICM = 0;
+
+    sc_notify( SCM_RESET_ACK );
+}
+
 //////////////////////////////////////////////////////////////////////
 // Mode Setup and Teardown                                          //
 //////////////////////////////////////////////////////////////////////
@@ -351,6 +368,16 @@ void ISO7816setup (void) {
     IPC0bits.IC1IP      = 4;                // medium priority
     IEC0bits.IC1IE      = 1;                // enable interrupts
 
+    // set up Input Capture 3 to monitor HIO
+    IC3CON              = 0;                // reset the module
+    IC3CONbits.ICTMR    = 1;                // use Timer 2
+    RPINR8bits.IC3R     = SC_HIO_RPIN;      // connect input to HIO
+    ISR_IC3             = isr_ack_rst;      // set the ISR
+    IFS2bits.IC3IF      = 0;                // clear the interrupt flag
+    IPC9bits.IC3IP      = 4;                // medium priority
+
+    IEC2bits.IC3IE      = 1;                // enable interrupts
+
     // set up Output Compare 1 to interupt at end of rate measurement period
     OC1CON              = 0;                // reset the module
     OC1CONbits.OCTSEL   = 0;                // use Timer 2
@@ -371,6 +398,14 @@ void ISO7816cleanup (void) {
     IFS0bits.IC1IF      = 0;        // "
     IPC0bits.IC1IP      = 0;        // "
     ISR_IC1             = NULL_ISR; // "
+
+    // shut down Input Capture 3
+    IC3CON              = 0;        // reset the module
+    RPINR8bits.IC3R     = 0x1F;     // disconnect the input from HIO
+    IEC2bits.IC3IE      = 0;        // diable interrupt
+    IFS2bits.IC3IF      = 0;        // "
+    IPC9bits.IC3IP      = 0;        // "
+    ISR_IC3             = NULL_ISR; // "
 
     // shut down Output Compare 1
     OC1CON              = 0;        // reset the module
@@ -427,7 +462,7 @@ void ISO7816stop (void) {
 
 unsigned int ISO7816periodic (void) {
     // check for async notifications
-    if (sc_notes.read != sc_notes.write) {
+    while (sc_notes.read != sc_notes.write) {
         switch (sc_notes.buffer[ sc_notes.read ]) {
             case SCM_NOTE_OVERFLOW:
                 bpWline( "!!! notification buffer overflowed" );
@@ -451,6 +486,12 @@ unsigned int ISO7816periodic (void) {
                 bpWstring( "t = " );
                 bpWintdec( sc_state.rate_cycles );
                 bpWline("c");
+                break;
+
+            case SCM_RESET_ACK:
+                bpWstring( "** device acknowledged reset at " );
+                bpWintdec( sc_state.reset_ack );
+                bpWline( "t" );
                 break;
 
             default:
