@@ -71,7 +71,7 @@ extern void _DefaultInterrupt (void);
  */
 #define ISR_RT __attribute__(( \
         __interrupt__( ISR_RT_PROLOGUE ), \
-        __no_auto_psv__, \
+        __no_auto_psv__, __section__( ".isr.runtime" ), \
     ))
 
 

@@ -21,28 +21,51 @@
 
 #include "interrupts.h"
 
-#define SC_HIO          BP_MISO
-#define SC_HIO_DIR      BP_MISO_DIR
-#define SC_HIO_ODC      BP_MISO_ODC
-#define SC_HIO_CN       BP_MISO_CN
-#define SC_HIO_RPIN     BP_MISO_RPIN
-#define SC_HIO_RPOUT    BP_MISO_RPOUT
+// define the pin mapping
+#if defined BUSPIRATEV3
+    #define SC_HIO          BP_MISO
+    #define SC_HIO_DIR      BP_MISO_DIR
+    #define SC_HIO_ODC      BP_MISO_ODC
+    #define SC_HIO_CN       BP_MISO_CN
+    #define SC_HIO_RPIN     BP_MISO_RPIN
+    #define SC_HIO_RPOUT    BP_MISO_RPOUT
 
-#define SC_HRST         BP_CS
-#define SC_HRST_DIR     BP_CS_DIR
-#define SC_HRST_ODC     BP_CS_ODC
-#define SC_HRST_CN      BP_CS_CN
-#define SC_HRST_RPIN    BP_CS_RPIN
-#define SC_HRST_RPOUT   BP_CS_RPOUT
+    #define SC_HRST         BP_CS
+    #define SC_HRST_DIR     BP_CS_DIR
+    #define SC_HRST_ODC     BP_CS_ODC
+    #define SC_HRST_CN      BP_CS_CN
+    #define SC_HRST_RPIN    BP_CS_RPIN
+    #define SC_HRST_RPOUT   BP_CS_RPOUT
 
-#define SC_CLK          BP_CLK
-#define SC_CLK_DIR      BP_CLK_DIR
-#define SC_CLK_ODC      BP_CLK_ODC
-#define SC_CLK_CN       BP_CLK_CN
-#define SC_CLK_RPIN     BP_CLK_RPIN
-#define SC_CLK_RPOUT    BP_CLK_RPOUT
+    #define SC_CLK          BP_CLK
+    #define SC_CLK_DIR      BP_CLK_DIR
+    #define SC_CLK_ODC      BP_CLK_ODC
+    #define SC_CLK_CN       BP_CLK_CN
+    #define SC_CLK_RPIN     BP_CLK_RPIN
+    #define SC_CLK_RPOUT    BP_CLK_RPOUT
+#elif defined BUSPIRATEV4
+    #error "ISO 7816 mode is not yet supported on v4 hardware."
+#else
+    #error "Unknown hardware version."
+#endif
 
 extern struct _modeConfig modeConfig;
+
+// session state values
+// enums aren't allowed in bitfields, so use defines
+#define SCS_MANUAL  0   // automatic operation is disabled
+#define SCS_OFFLINE 1   // no session is active, the hardware is disconnected
+#define SCS_RESET   2   // host has initiated reset
+#define SCS_ATR     3   // device is sending ATR
+#define SCS_IDLE    4   // session active, waiting for command
+#define SCS_COMMAND 5   // command in progress
+
+struct sc_state_t {
+    unsigned session :4; // session state, use SCS_* defines
+
+    
+} sc_state;
+
 
 /** Prescaler ratios for the SPI clock generator.
  * The numbers in the identifiers are frequency in KHz.
@@ -102,55 +125,103 @@ void scSCKEnable (int enable) {
     SPI1STATbits.SPIEN = enable & 1;
 }
 
-void ISO7816Process (void) {
+inline void sc_transition (unsigned new_state) {
+    /* For most settings one mode is torn down and then another is set up.
+     * There are a few settings, however, which would cause issues if they were
+     * briefly disabled. Instead the setup for each mode sets these to the
+     * correct value, which may be the current one. The complete list:
+     *
+     *     SC_HRST_CN           enables monitoring of bus resets
+     *                          disabling this could make us miss a reset
+     *
+     *     U2MODEbits.UARTEN    enables the UART
+     *                          disabling this could make us miss a character
+     */
 
+    // tear down the current mode
+    switch (sc_state.session) {
+        case SCS_MANUAL:
+            // no teardown, everything's already stopped
+            break;
+            
+        case SCS_OFFLINE:
+            SC_CLK_CN = 0;
+            break;
+
+        case SCS_RESET:
+            // stop the clock measurement timers
+            T3CONbits.TON = 0;
+            T2CONbits.TON = 0;
+            break;
+
+        case SCS_ATR:
+            // no teardown yet
+            break;
+    }
+
+    // set up the new mode
+    switch (new_state) {
+        case SCS_MANUAL:
+            U2MODEbits.UARTEN   = 0; // stop the UART
+            SC_HRST_CN          = 0; // don't listen for reset
+            break;
+
+        case SCS_OFFLINE:
+            U2MODEbits.UARTEN   = 0; // no IO when the clock is stopped
+            SC_HRST_CN          = 0; // no soft reset when clock is stopped
+            SC_CLK_CN           = 1; // wait for the clock to start
+            break;
+
+        case SCS_RESET:
+            // start measuring device clock rate
+            T2CONbits.TON   = 0;
+            T3CONbits.TON   = 0;
+            TMR2            = 0;
+            TMR3            = 0;
+            PR2             = 700; // 700t leaves us 100t before IO is allowed
+            PR3             = 0xFFFF;
+            T2CONbits.TON   = 1;
+            T3CONbits.TON   = 1;
+
+            U2MODEbits.UARTEN   = 0; // the IO line is undefined
+            SC_HRST_CN          = 1; // allow soft reset
+            break;
+
+        case SCS_ATR:
+            U2MODEbits.UARTEN   = 1;
+            SC_HRST_CN          = 1; // allow soft reset
+            break;
+    }
+
+    sc_state.session = new_state;
 }
-
-unsigned ISO7816write (unsigned int c) {
-    return 0;
-}
-
-unsigned int ISO7816read (void) {
-    return 0;
-}
-
 
 void ISR_RT isr_input (void) {
     IFS1bits.CNIF = 0;
 
-    // received soft reset, go back to BRGH calculation
-    if (SC_HRST_CN && !SC_HRST) {
-        U2MODEbits.UARTEN   = 0;
-        SC_HRST_CN          = 0;
-        SC_CLK_CN           = 1;
+    // clock started, beginning of cold reset sequence
+    if (SC_CLK_CN && SCS_OFFLINE == sc_state.session && SC_CLK && !SC_HRST) {
+        sc_transition( SCS_RESET );
     }
 
-    // clock started; beginning of reset sequence
-    if (SC_CLK_CN && SC_CLK && !SC_HRST) {
-        SC_CLK_CN = 0;
-
-        T2CONbits.TON   = 0;
-        T3CONbits.TON   = 0;
-        TMR2            = 0;
-        TMR3            = 0;
-        PR2             = 700;
-        PR3             = 0xFFFF;
-        T2CONbits.TON   = 1;
-        T3CONbits.TON   = 1;
+    // reset asserted, beginning of warm reset sequence
+    if (SC_HRST_CN && SCS_OFFLINE != sc_state.session && !SC_HRST) {
+        sc_transition( SCS_RESET );
     }
 }
 
 void ISR_RT isr_timer (void) {
     IFS0bits.T2IF = 0;
 
-    T3CONbits.TON = 0;
-    T2CONbits.TON = 0;
+    // make sure we get the values as close together as possible
+    int cycles  = TMR3;
+    int ticks   = TMR2;
 
-    U2BRG = (int)( 93.0 * (double)TMR3 / (double)(TMR2 + PR2) + 1.0 );
-    U2MODEbits.UARTEN = 1;
+    // I don't like doing floating-point math in an ISR but we need this value
+    // 320 - 1600 cycles after the interrupt, depending on the bus clock rate.
+    U2BRG = (int)( 93.0 * (double)cycles / (double)(ticks + PR2) + 1.0 );
 
-    // listen for soft reset;
-    SC_HRST_CN = 1;
+    sc_transition( SCS_ATR );
 }
 
 void ISO7816setup (void) {
@@ -171,7 +242,7 @@ void ISO7816setup (void) {
     RPINR19bits.U2RXR   = SC_HIO_RPIN;  // connect pin to Rx input
     //SC_HIO_RPOUT        = U2TX_IO;      // connect pin to Tx output
 
-    // set up timer 1 as synchronous counter on CLK
+    // set up timer 2 as synchronous counter on CLK
     T2CON               = 0;            // reset the timer
     T2CONbits.TCS       = 1;            // enable external sync
     RPINR3bits.T2CKR    = SC_CLK_RPIN;  // connect clock input to CLK
@@ -231,27 +302,19 @@ void ISO7816cleanup (void) {
     SC_CLK_DIR      = 1;
 }
 
-void ISO7816macro (unsigned int c) {
-
-}
-
-int once_flag = 0;
 
 void ISO7816start (void) {
-    SC_CLK_CN = 1;
-    once_flag = 0;
-
+    sc_transition( SCS_OFFLINE );
     modeConfig.periodicService = 1;
 }
 
 void ISO7816stop (void) {
-    T2CONbits.TON   = 0;
-    T3CONbits.TON   = 0;
-    SC_HRST_CN      = 0;
-    SC_CLK_CN       = 0;
-
+    sc_transition( SCS_MANUAL );
     modeConfig.periodicService = 0;
 }
+
+
+int once_flag = 0;
 
 unsigned int ISO7816periodic (void) {
     if (!once_flag && U2BRG) {
@@ -279,6 +342,18 @@ unsigned int ISO7816periodic (void) {
     }
 
     return 0;
+}
+
+unsigned ISO7816write (unsigned int c) {
+    return 0;
+}
+
+unsigned int ISO7816read (void) {
+    return 0;
+}
+
+void ISO7816macro (unsigned int c) {
+
 }
 
 void ISO7816pins (void) {
