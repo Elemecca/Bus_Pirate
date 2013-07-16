@@ -110,11 +110,14 @@ struct sc_state_t {
     unsigned session :4; // session state, use SCS_* defines
     unsigned note_overflow  :1;
 
-    unsigned rate_ticks;
-    unsigned rate_cycles;
+    unsigned int mult_t2;   // rollover multiplier for Timer 2
+    unsigned int mult_t3;   // rollover multiplier for Timer 3
 
-    unsigned reset_ack;     // tick count when device set IO high
-    unsigned reset_end;     // tick count when host released RST
+    unsigned long rate_ticks;
+    unsigned long rate_cycles;
+
+    unsigned int  reset_ack;    // tick count when device set IO high, <=200
+    unsigned long reset_end;    // tick count when host released RST
 
     unsigned short count_clk_start;
     unsigned short count_clk_rate;
@@ -266,7 +269,7 @@ inline void sc_transition (unsigned new_state) {
         case SCS_RESET:
             U2MODEbits.UARTEN   = 0; // the IO line is undefined
             ISR_IC2 = isr_end_rst;   // enable reset end detection
-            IC2CONbits.ICM      = 1; // "
+            IC2CONbits.ICM      = 3; // detect rising edge
             break;
 
         case SCS_ATR:
@@ -282,7 +285,9 @@ void ISR_RT isr_clk_start (void) {
 
     // store the current value of the cycle timer for use in rate calc
     sc_state.rate_cycles = IC1BUF;
+    sc_state.mult_t3     = 0;
     sc_state.rate_ticks  = 0;
+    sc_state.mult_t2     = 0;
 
     // this is a one-shot, disable the trigger
     IC1CONbits.ICM = 0; // disable module
@@ -302,7 +307,7 @@ void ISR_RT isr_ack_rst (void) {
     IFS2bits.IC3IF = 0;
 
     // save the tick count when the ack came in
-    sc_state.reset_ack = IC3BUF;
+    sc_state.reset_ack = IC3BUF + (long)sc_state.mult_t2 * PR2;
 
     // this is a one-shot, disable the trigger
     IC3CONbits.ICM = 0;
@@ -316,7 +321,7 @@ void ISR_RT isr_end_rst (void) {
     IFS0bits.IC2IF = 0;
 
     // save the tick count when reset ended
-    sc_state.reset_end = IC2BUF;
+    sc_state.reset_end = IC2BUF + (long)sc_state.mult_t2 * PR2;
 
     // this is temporarily a one-shot, disable the trigger
     IC2CONbits.ICM = 0;
@@ -334,27 +339,22 @@ void ISR_RT isr_rate (void) {
     IFS0bits.OC1IF = 0;
 
     // make sure we get the values as close together as possible
-    register int cycles  = TMR3;
-    register int ticks   = TMR2;
+    unsigned long cycles  = TMR3;
+    unsigned long ticks   = TMR2;
 
     // this is currently a one-shot, disable the trigger
     OC1CONbits.OCM = 0;
 
     // compensate for timer rollver
-    if (cycles < sc_state.rate_cycles) {
-        cycles += PR3 - sc_state.rate_cycles;
-    } else {
-        cycles -= sc_state.rate_cycles;
-    }
-    if (ticks < sc_state.rate_ticks) {
-        ticks += PR2 - sc_state.rate_ticks;
-    } else {
-        ticks -= sc_state.rate_ticks;
-    }
+    cycles += (long)sc_state.mult_t3 * PR3;
+    ticks  += (long)sc_state.mult_t2 * PR2;
+
+    // compensate for free-running cycle timer
+    cycles -= sc_state.rate_cycles;
 
     // I don't like doing floating-point math in an ISR but we need this value
     // 320 - 1600 cycles after the interrupt, depending on the bus clock rate.
-    U2BRG = (int)( 93.0 * (double)cycles / (double)(ticks + PR2) + 1.0 );
+    U2BRG = (int)( 93.0 * (double)cycles / (double)ticks + 1.0 );
 
     sc_state.rate_cycles = cycles;
     sc_state.rate_ticks  = ticks;
@@ -363,6 +363,16 @@ void ISR_RT isr_rate (void) {
     sc_transition( SCS_ATR );
 
     sc_state.count_clk_rate++;
+}
+
+void ISR_RT isr_t2_roll (void) {
+    IFS0bits.T2IF = 0;
+    sc_state.mult_t2++;
+}
+
+void ISR_RT isr_t3_roll (void) {
+    IFS0bits.T3IF = 0;
+    sc_state.mult_t3++;
 }
 
 
@@ -394,16 +404,18 @@ void ISO7816setup (void) {
     PR2                 = 0xFFFF;       // maximum period; don't restart early
     T2CONbits.TCS       = 1;            // enable external sync
     RPINR3bits.T2CKR    = SC_CLK_RPIN;  // connect clock input to CLK
-    IFS0bits.T2IF       = 0;            // disable interrupts
-    IPC1bits.T2IP       = 0;            // "
-    IEC0bits.T2IE       = 0;            // "
+    ISR_T2              = isr_t2_roll;  // set up rollover interrupt handler
+    IFS0bits.T2IF       = 0;            // clear interupt flag
+    IPC1bits.T2IP       = 5;            // high priority, rolls over quickly
+    IEC0bits.T2IE       = 1;            // enable interrupt
 
     // set up Timer 3 as timer
     T3CON               = 0;            // reset the timer
     PR3                 = 0xFFFF;       // maximum period; don't restart early
-    IFS0bits.T3IF       = 0;            // disable interrupts
-    IPC2bits.T3IP       = 0;            // "
-    IEC0bits.T3IE       = 0;            // "
+    ISR_T3              = isr_t3_roll;  // set up rollover interrupt handler
+    IFS0bits.T3IF       = 0;            // clear interrupt flag
+    IPC2bits.T3IP       = 6;            // high priority, rolls over quickly
+    IEC0bits.T3IE       = 1;            // enable interrupt
 
     // set up Input Capture 1 to detect clock start
     IC1CON              = 0;                // reset the capture module
@@ -439,7 +451,6 @@ void ISO7816setup (void) {
     IFS0bits.OC1IF      = 0;                // clear the interrupt flag
     IPC0bits.OC1IP      = 7;                // every cycle counts, max priority
     IEC0bits.OC1IE      = 1;                // enable interrupts
-
 }
 
 void ISO7816cleanup (void) {
@@ -486,7 +497,13 @@ void ISO7816cleanup (void) {
     RPINR3bits.T2CKR    = 0;        // disconnect clock input
 
     // shut down timer 3
-    T3CON               = 0;
+    IEC0bits.T3IE       = 0;        // disable interrupt
+    IPC2bits.T3IP       = 0;        // "
+    IFS0bits.T3IF       = 0;        // "
+    ISR_T3              = NULL_ISR; // "
+    T3CON               = 0;        // reset the timer
+    TMR3                = 0;        // "
+    PR3                 = 0;        // "
 
     // disconnect UART 2 from host IO
     U2MODE              = 0;        // reset the UART
@@ -536,6 +553,10 @@ void ISO7816stop (void) {
     bpWintdec( sc_state.count_ack_reset );
     bpWstring( ", end_reset: " );
     bpWintdec( sc_state.count_end_reset );
+    bpWstring( ", t2_roll: " );
+    bpWintdec( sc_state.mult_t2 );
+    bpWstring( ", t3_roll: " );
+    bpWintdec( sc_state.mult_t3 );
     bpWline("");
 }
 
@@ -545,7 +566,9 @@ unsigned int ISO7816periodic (void) {
     while (sc_notes.read != sc_notes.write) {
         switch (sc_notes.buffer[ sc_notes.read ]) {
             case SCM_CLK_START:
-                bpWline( "** bus clock started, begin cold reset" );
+                bpWstring( "** bus clock started, begin cold reset, t3: " );
+                bpWlongdec( sc_state.rate_cycles );
+                bpWline( "c" );
                 break;
 
             case SCM_CLK_RATE:
@@ -558,9 +581,9 @@ unsigned int ISO7816periodic (void) {
                 bpWintdec( U2BRG );
                 
                 bpWstring( ", " );
-                bpWintdec( sc_state.rate_ticks );
+                bpWlongdec( sc_state.rate_ticks );
                 bpWstring( "t = " );
-                bpWintdec( sc_state.rate_cycles );
+                bpWlongdec( sc_state.rate_cycles );
                 bpWline("c");
                 break;
 
@@ -572,13 +595,13 @@ unsigned int ISO7816periodic (void) {
 
             case SCM_RESET_END:
                 bpWstring( "** host released RST at " );
-                bpWintdec( sc_state.reset_end );
+                bpWlongdec( sc_state.reset_end );
                 bpWline( "t" );
                 break;
 
             default:
                 bpWstring( "!!! received unknown notification " );
-                bpWbyte( sc_notes.buffer[ sc_notes.read ] );
+                bpWhex( sc_notes.buffer[ sc_notes.read ] );
                 bpWline("");
                 break;
         }
@@ -594,7 +617,7 @@ unsigned int ISO7816periodic (void) {
         register int status = U2STA;
 
         bpWstring( "Received " );
-        bpWhex( U2RXREG );
+        bpWbyte( U2RXREG );
 
         if (status & 0xC) {
             bpWstring( " p f" );
