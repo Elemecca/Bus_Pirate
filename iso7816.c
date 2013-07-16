@@ -107,6 +107,7 @@ extern struct _modeConfig modeConfig;
 
 struct sc_state_t {
     unsigned session :4; // session state, use SCS_* defines
+    unsigned note_overflow  :1;
 
     unsigned rate_ticks;
     unsigned rate_cycles;
@@ -116,10 +117,10 @@ struct sc_state_t {
 } sc_state;
 
 
-#define SCM_NOTE_OVERFLOW   1   // the notice buffer overflowed
-#define SCM_CLK_START       2   // clock signal detected
-#define SCM_CLK_RATE        3   // new clock rate calculated
-#define SCM_RESET_ACK       4   // device acknowledged reset by setting IO high
+#define SCM_CLK_START       1   // clock signal detected
+#define SCM_CLK_RATE        2   // new clock rate calculated
+#define SCM_RESET_ACK       3   // device acknowledged reset by setting IO high
+#define SCM_RESET_END       4   // host released HRST
 
 #define SC_NOTIFY_BUFFER_SIZE 32
 struct {
@@ -129,11 +130,14 @@ struct {
 } sc_notes;
 
 inline void sc_notify (unsigned short message) {
-    if (sc_notes.write == (sc_notes.read - 1) % SC_NOTIFY_BUFFER_SIZE) {
-        sc_notes.buffer[ sc_notes.write ] = SCM_NOTE_OVERFLOW;
+    if (sc_state.note_overflow) return;
+
+    register short next = (sc_notes.write + 1) % SC_NOTIFY_BUFFER_SIZE;
+    if (next == sc_notes.read) {
+        sc_state.note_overflow = 1;
     } else {
         sc_notes.buffer[ sc_notes.write ] = message;
-        sc_notes.write = (sc_notes.write + 1) % SC_NOTIFY_BUFFER_SIZE;
+        sc_notes.write = next;
     }
 }
 
@@ -449,6 +453,13 @@ void ISO7816start (void) {
         bpWline( "need to observe the reset sequence in order to know the" );
         bpWline( "protocol parameters that are in use." );
     } else {
+        // reset the state structure
+        memset( &sc_state, 0, sizeof( struct sc_state_t ) );
+
+        // reset the notification buffer
+        sc_notes.write = 0;
+        sc_notes.read  = 0;
+
         sc_transition( SCS_OFFLINE );
         modeConfig.periodicService = 1;
     }
@@ -464,10 +475,6 @@ unsigned int ISO7816periodic (void) {
     // check for async notifications
     while (sc_notes.read != sc_notes.write) {
         switch (sc_notes.buffer[ sc_notes.read ]) {
-            case SCM_NOTE_OVERFLOW:
-                bpWline( "!!! notification buffer overflowed" );
-                break;
-                
             case SCM_CLK_START:
                 bpWline( "** bus clock started, begin cold reset" );
                 break;
@@ -501,6 +508,11 @@ unsigned int ISO7816periodic (void) {
                 break;
         }
         sc_notes.read = (sc_notes.read + 1) % SC_NOTIFY_BUFFER_SIZE;
+    }
+
+    if (sc_state.note_overflow) {
+        bpWline( "!!! notification buffer overflowed" );
+        sc_state.note_overflow = 0;
     }
 
     if (U2STAbits.URXDA) {
