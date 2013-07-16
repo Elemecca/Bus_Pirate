@@ -55,6 +55,7 @@
 
 #ifdef BP_USE_ISO7816
 
+#include <string.h>
 #include "interrupts.h"
 
 //////////////////////////////////////////////////////////////////////
@@ -113,7 +114,12 @@ struct sc_state_t {
     unsigned rate_cycles;
 
     unsigned reset_ack;     // tick count when device set IO high
-    unsigned reset_reset;   // tick count when host released RST
+    unsigned reset_end;     // tick count when host released RST
+
+    unsigned short count_clk_start;
+    unsigned short count_clk_rate;
+    unsigned short count_ack_reset;
+    unsigned short count_end_reset;
 } sc_state;
 
 
@@ -123,7 +129,7 @@ struct sc_state_t {
 #define SCM_RESET_END       4   // host released HRST
 
 #define SC_NOTIFY_BUFFER_SIZE 32
-struct {
+struct sc_notes_t {
     unsigned short read;
     unsigned short write;
     unsigned short buffer[ SC_NOTIFY_BUFFER_SIZE ];
@@ -207,6 +213,8 @@ void scSCKEnable (int enable) {
 // State Management and Interrupts                                  //
 //////////////////////////////////////////////////////////////////////
 
+void ISR_RT isr_end_rst (void);
+
 inline void sc_transition (unsigned new_state) {
     /* For most settings one mode is torn down and then another is set up.
      * There are a few settings, however, which would cause issues if they were
@@ -224,7 +232,9 @@ inline void sc_transition (unsigned new_state) {
             break;
             
         case SCS_OFFLINE:
-            // no teardown, everything is one-shot
+            IC1CONbits.ICM      = 0; // disable clock start detection
+            IC3CONbits.ICM      = 0; // disable reset ack detection
+            IEC2bits.IC3IE      = 1; // turn IC3 interrupts back on
             break;
 
         case SCS_RESET:
@@ -249,12 +259,14 @@ inline void sc_transition (unsigned new_state) {
             TMR3                = 0; // start timer
             T3CONbits.TON       = 1; // "
             IC1CONbits.ICM      = 3; // enable clock start detection
-            OC1CONbits.OCM      = 1; // enable rate calculation trigger
+            IEC2bits.IC3IE      = 0; // will be re-enabled in isr_ack_rst
             IC3CONbits.ICM      = 3; // enable reset ack detection
             break;
 
         case SCS_RESET:
             U2MODEbits.UARTEN   = 0; // the IO line is undefined
+            ISR_IC2 = isr_end_rst;   // enable reset end detection
+            IC2CONbits.ICM      = 1; // "
             break;
 
         case SCS_ATR:
@@ -273,11 +285,49 @@ void ISR_RT isr_clk_start (void) {
     sc_state.rate_ticks  = 0;
 
     // this is a one-shot, disable the trigger
-    IC1CONbits.ICM = 0;
+    IC1CONbits.ICM = 0; // disable module
+    IFS0bits.IC1IF = 0; // clear the interrupt flag again
     
     // clock started, beginning of cold reset sequence
     sc_notify( SCM_CLK_START );
     sc_transition( SCS_RESET );
+
+    // allow interrupts from reset ack
+    IEC2bits.IC3IE = 1;
+
+    sc_state.count_clk_start++;
+}
+
+void ISR_RT isr_ack_rst (void) {
+    IFS2bits.IC3IF = 0;
+
+    // save the tick count when the ack came in
+    sc_state.reset_ack = IC3BUF;
+
+    // this is a one-shot, disable the trigger
+    IC3CONbits.ICM = 0;
+
+    sc_notify( SCM_RESET_ACK );
+
+    sc_state.count_ack_reset++;
+}
+
+void ISR_RT isr_end_rst (void) {
+    IFS0bits.IC2IF = 0;
+
+    // save the tick count when reset ended
+    sc_state.reset_end = IC2BUF;
+
+    // this is temporarily a one-shot, disable the trigger
+    IC2CONbits.ICM = 0;
+
+    // in 300 ticks run the clock rate calculation
+    OC1R = sc_state.reset_end + 300;
+    OC1CONbits.OCM = 1;
+
+    sc_notify( SCM_RESET_END );
+
+    sc_state.count_end_reset++;
 }
 
 void ISR_RT isr_rate (void) {
@@ -311,19 +361,10 @@ void ISR_RT isr_rate (void) {
 
     sc_notify( SCM_CLK_RATE );
     sc_transition( SCS_ATR );
+
+    sc_state.count_clk_rate++;
 }
 
-void ISR_RT isr_ack_rst (void) {
-    IFS2bits.IC3IF = 0;
-
-    // save the tick count when the ack came in
-    sc_state.reset_ack = IC3BUF;
-
-    // this is a one-shot, disable the trigger
-    IC3CONbits.ICM = 0;
-
-    sc_notify( SCM_RESET_ACK );
-}
 
 //////////////////////////////////////////////////////////////////////
 // Mode Setup and Teardown                                          //
@@ -337,6 +378,7 @@ void ISO7816setup (void) {
     SC_CLK_DIR  = 1;
     SC_HRST_DIR = 1;
     SC_HIO_DIR  = 1;
+    SC_HIO_ODC  = 1;
 
     // set up UART 2 on host IO
     U2MODE              = 0;            // reset the UART
@@ -372,6 +414,14 @@ void ISO7816setup (void) {
     IPC0bits.IC1IP      = 4;                // medium priority
     IEC0bits.IC1IE      = 1;                // enable interrupts
 
+    // set up Input Capture 2 to monitor HRST
+    IC2CON              = 0;                // reset the module
+    IC2CONbits.ICTMR    = 1;                // use Timer 2
+    RPINR7bits.IC2R     = SC_HRST_RPIN;     // connect input to HRST
+    IFS0bits.IC2IF      = 0;                // clear the interrupt flag
+    IPC1bits.IC2IP      = 4;                // medium priority
+    IEC0bits.IC2IE      = 1;                // enable interrupts
+
     // set up Input Capture 3 to monitor HIO
     IC3CON              = 0;                // reset the module
     IC3CONbits.ICTMR    = 1;                // use Timer 2
@@ -379,7 +429,6 @@ void ISO7816setup (void) {
     ISR_IC3             = isr_ack_rst;      // set the ISR
     IFS2bits.IC3IF      = 0;                // clear the interrupt flag
     IPC9bits.IC3IP      = 4;                // medium priority
-
     IEC2bits.IC3IE      = 1;                // enable interrupts
 
     // set up Output Compare 1 to interupt at end of rate measurement period
@@ -402,6 +451,14 @@ void ISO7816cleanup (void) {
     IFS0bits.IC1IF      = 0;        // "
     IPC0bits.IC1IP      = 0;        // "
     ISR_IC1             = NULL_ISR; // "
+
+    // shut down Input Capture 2
+    IC2CON              = 0;        // reset the module
+    RPINR7bits.IC2R     = 0x1F;     // disconnect this input from HRST
+    IEC0bits.IC2IE      = 0;        // disable interrupt
+    IFS0bits.IC2IF      = 0;        // "
+    IPC1bits.IC2IP      = 0;        // "
+    ISR_IC2             = NULL_ISR; // ""
 
     // shut down Input Capture 3
     IC3CON              = 0;        // reset the module
@@ -438,8 +495,11 @@ void ISO7816cleanup (void) {
 
     // reset IO pins
     SC_HRST_DIR     = 1;
+    SC_HRST_ODC     = 0;
     SC_HIO_DIR      = 1;
+    SC_HIO_ODC      = 0;
     SC_CLK_DIR      = 1;
+    SC_CLK_ODC      = 0;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -447,18 +507,15 @@ void ISO7816cleanup (void) {
 //////////////////////////////////////////////////////////////////////
 
 void ISO7816start (void) {
-    if (SC_VBUS || SC_HRST || SC_HIO) {
+    if (SC_VBUS || SC_HRST) {
         bpWline( "!!! the bus appears to be active, not starting" );
         bpWline( "We can't start monitoring an active session because we" );
         bpWline( "need to observe the reset sequence in order to know the" );
         bpWline( "protocol parameters that are in use." );
     } else {
-        // reset the state structure
+        // reset the state structures
         memset( &sc_state, 0, sizeof( struct sc_state_t ) );
-
-        // reset the notification buffer
-        sc_notes.write = 0;
-        sc_notes.read  = 0;
+        memset( &sc_notes, 0, sizeof( struct sc_notes_t ) );
 
         sc_transition( SCS_OFFLINE );
         modeConfig.periodicService = 1;
@@ -466,8 +523,20 @@ void ISO7816start (void) {
 }
 
 void ISO7816stop (void) {
+    if (SCS_MANUAL == sc_state.session) return;
+
     sc_transition( SCS_MANUAL );
     modeConfig.periodicService = 0;
+
+    bpWstring( "clk_start: " );
+    bpWintdec( sc_state.count_clk_start );
+    bpWstring( ", clk_rate: " );
+    bpWintdec( sc_state.count_clk_rate );
+    bpWstring( ", ack_reset: " );
+    bpWintdec( sc_state.count_ack_reset );
+    bpWstring( ", end_reset: " );
+    bpWintdec( sc_state.count_end_reset );
+    bpWline("");
 }
 
 
@@ -498,6 +567,12 @@ unsigned int ISO7816periodic (void) {
             case SCM_RESET_ACK:
                 bpWstring( "** device acknowledged reset at " );
                 bpWintdec( sc_state.reset_ack );
+                bpWline( "t" );
+                break;
+
+            case SCM_RESET_END:
+                bpWstring( "** host released RST at " );
+                bpWintdec( sc_state.reset_end );
                 bpWline( "t" );
                 break;
 
