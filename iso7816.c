@@ -14,7 +14,12 @@
  *    but WITHOUT ANY WARRANTY; without even the implied warranty of
  *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  *
- * 
+ * Pins:
+ *   CLK    bus shared clock; v3 doesn't have enough pins for split clock
+ *   HRST   RST line from host device
+ *   HIO    I/O line from host device
+ *   CRST   RST line to responding device
+ *   CIO    I/O line to responding device
  *
  * Device allocation:
  *   U2     sends and receives data on HIO
@@ -25,6 +30,11 @@
  *   IC3    detects significant events on HIO
  *   OC1    handles timing of clock rate measurements
  *   SPI1   generates clock signal for host mode
+ *
+ * It would be much better if we could use 32-bit timers, but we need to
+ * capture from both timers and the Input Capture modules only support T2
+ * and T3. We therefore use the timer interrupts to maintain a count of how
+ * many times each has rolled over and then multiply to get the 32-bit value.
  *
  * Start-up sequence for sniffer mode:
  *   - SCS_OFFLINE: bus is inactive
@@ -41,7 +51,7 @@
  *       - detected by IC3, notify user of timing
  *     - host releases HRST high at or after 400t from clock start
  *       - detected by IC2, notify user of timing
- *       - set OC1 for 300t
+ *       - set OC1 to trigger in 300t
  *     - calculate data rate 300t after HRST goes high
  *       - triggered by OC1
  *       - transition to SCS_ATR
