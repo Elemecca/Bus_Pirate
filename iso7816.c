@@ -66,6 +66,7 @@
 #ifdef BP_USE_ISO7816
 
 #include <string.h>
+#include <stdio.h> // for sprintf
 #include "interrupts.h"
 
 //////////////////////////////////////////////////////////////////////
@@ -128,11 +129,6 @@ struct sc_state_t {
 
     unsigned int  reset_ack;    // tick count when device set IO high, <=200
     unsigned long reset_end;    // tick count when host released RST
-
-    unsigned short count_clk_start;
-    unsigned short count_clk_rate;
-    unsigned short count_ack_reset;
-    unsigned short count_end_reset;
 } sc_state;
 
 
@@ -158,6 +154,22 @@ inline void sc_notify (unsigned short message) {
         sc_notes.buffer[ sc_notes.write ] = message;
         sc_notes.write = next;
     }
+}
+
+
+#define SC_PROF_LENGTH 128
+struct sc_prof_t {
+    unsigned long time;
+    const char *event;
+} sc_prof[ SC_PROF_LENGTH ];
+
+unsigned sc_prof_idx;
+
+inline void sc_profile (const char *event) {
+    if (sc_prof_idx >= SC_PROF_LENGTH) return;
+    sc_prof[ sc_prof_idx ].time = TMR4 | ((long)TMR5HLD << 16);
+    sc_prof[ sc_prof_idx ].event = event;
+    sc_prof_idx++;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -229,6 +241,8 @@ void scSCKEnable (int enable) {
 void ISR_RT isr_end_rst (void);
 
 inline void sc_transition (unsigned new_state) {
+    sc_profile( "> sc_transition" );
+
     /* For most settings one mode is torn down and then another is set up.
      * There are a few settings, however, which would cause issues if they were
      * briefly disabled. Instead the setup for each mode sets these to the
@@ -288,9 +302,12 @@ inline void sc_transition (unsigned new_state) {
     }
 
     sc_state.session = new_state;
+
+    sc_profile( "< sc_transition" );
 }
 
 void ISR_RT isr_clk_start (void) {
+    sc_profile( "> isr_clk_start" );
     IFS0bits.IC1IF = 0;
 
     // store the current value of the cycle timer for use in rate calc
@@ -310,10 +327,11 @@ void ISR_RT isr_clk_start (void) {
     // allow interrupts from reset ack
     IEC2bits.IC3IE = 1;
 
-    sc_state.count_clk_start++;
+    sc_profile( "< isr_clk_start" );
 }
 
 void ISR_RT isr_ack_rst (void) {
+    sc_profile( "> isr_ack_rst" );
     IFS2bits.IC3IF = 0;
 
     // save the tick count when the ack came in
@@ -324,10 +342,11 @@ void ISR_RT isr_ack_rst (void) {
 
     sc_notify( SCM_RESET_ACK );
 
-    sc_state.count_ack_reset++;
+    sc_profile( "< isr_ack_rst" );
 }
 
 void ISR_RT isr_end_rst (void) {
+    sc_profile( "> isr_end_rst" );
     IFS0bits.IC2IF = 0;
     unsigned int ticks = IC2BUF;
 
@@ -343,10 +362,11 @@ void ISR_RT isr_end_rst (void) {
 
     sc_notify( SCM_RESET_END );
 
-    sc_state.count_end_reset++;
+    sc_profile( "< isr_end_rst" );
 }
 
 void ISR_RT isr_rate (void) {
+    sc_profile( "> isr_rate" );
     IFS0bits.OC1IF = 0;
 
     // make sure we get the values as close together as possible
@@ -373,7 +393,7 @@ void ISR_RT isr_rate (void) {
     sc_notify( SCM_CLK_RATE );
     sc_transition( SCS_ATR );
 
-    sc_state.count_clk_rate++;
+    sc_profile( "< isr_rate" );
 }
 
 void ISR_RT isr_t2_roll (void) {
@@ -462,6 +482,19 @@ void ISO7816setup (void) {
     IFS0bits.OC1IF      = 0;                // clear the interrupt flag
     IPC0bits.OC1IP      = 7;                // every cycle counts, max priority
     IEC0bits.OC1IE      = 1;                // enable interrupts
+
+    // set up Timer 4/5 as 32-bit cycle counter for profiling
+    T4CON               = 0;                // reset T4
+    T5CON               = 0;                // reset T5
+    TMR5                = 0;                // initialize timer to 0
+    TMR4                = 0;                // "
+    PR5                 = 0xFFFF;           // set maximum period
+    PR4                 = 0xFFFF;           // "
+    T4CONbits.T32       = 1;                // enable 32-bit mode
+    IFS1bits.T5IF       = 0;                // disable interrupts
+    IPC7bits.T5IP       = 0;                // "
+    IEC1bits.T5IE       = 0;                // "
+
 }
 
 void ISO7816cleanup (void) {
@@ -521,6 +554,12 @@ void ISO7816cleanup (void) {
     RPINR19bits.U2RXR   = 0x1F;     // disconnect Rx input
     SC_HIO_RPOUT        = 0;        // disconnect Tx output
 
+    // clean up Timer 4/5
+    T4CON               = 0;
+    T5CON               = 0;
+    TMR4                = 0;
+    TMR5                = 0;
+
     // reset IO pins
     SC_HRST_DIR     = 1;
     SC_HRST_ODC     = 0;
@@ -544,7 +583,13 @@ void ISO7816start (void) {
         // reset the state structures
         memset( &sc_state, 0, sizeof( struct sc_state_t ) );
         memset( &sc_notes, 0, sizeof( struct sc_notes_t ) );
+        sc_prof_idx = 0;
 
+        // start profiling counter
+        TMR5            = 0;    // reset the timer value
+        TMR4            = 0;    // "
+        T4CONbits.TON   = 1;    // start the timer
+        
         sc_transition( SCS_OFFLINE );
         modeConfig.periodicService = 1;
     }
@@ -556,19 +601,26 @@ void ISO7816stop (void) {
     sc_transition( SCS_MANUAL );
     modeConfig.periodicService = 0;
 
-    bpWstring( "clk_start: " );
-    bpWintdec( sc_state.count_clk_start );
-    bpWstring( ", clk_rate: " );
-    bpWintdec( sc_state.count_clk_rate );
-    bpWstring( ", ack_reset: " );
-    bpWintdec( sc_state.count_ack_reset );
-    bpWstring( ", end_reset: " );
-    bpWintdec( sc_state.count_end_reset );
-    bpWstring( ", t2_roll: " );
+    // stop profiling counter
+    T4CONbits.TON = 0;
+
+    bpWstring( "t2: " );
     bpWintdec( sc_state.mult_t2 );
-    bpWstring( ", t3_roll: " );
+    bpWstring( ", t3: " );
     bpWintdec( sc_state.mult_t3 );
     bpWline("");
+
+    // write profiling events
+    unsigned int idx;
+    char buffer[ 80 ];
+    for (idx = 0; idx < sc_prof_idx; idx++) {
+        snprintf( (char*)&buffer, 80, "%10lu %s",
+                sc_prof[ idx ].time, sc_prof[ idx ].event );
+        bpWline( (char*)&buffer );
+    }
+
+    if (sc_prof_idx >= SC_PROF_LENGTH)
+        bpWline( "!!! profiling buffer overflowed" );
 }
 
 
