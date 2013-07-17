@@ -319,16 +319,17 @@ void ISR_RT isr_ack_rst (void) {
 
 void ISR_RT isr_end_rst (void) {
     IFS0bits.IC2IF = 0;
+    unsigned int ticks = IC2BUF;
 
-    // save the tick count when reset ended
-    sc_state.reset_end = IC2BUF + (long)sc_state.mult_t2 * PR2;
-
-    // this is temporarily a one-shot, disable the trigger
+    // this is a one-shot, disable the trigger
     IC2CONbits.ICM = 0;
 
     // in 300 ticks run the clock rate calculation
-    OC1R = sc_state.reset_end + 300;
+    OC1R = (ticks + 300) % PR2;
     OC1CONbits.OCM = 1;
+
+    // save the tick count when reset ended
+    sc_state.reset_end = ticks + (long)sc_state.mult_t2 * PR2;
 
     sc_notify( SCM_RESET_END );
 
