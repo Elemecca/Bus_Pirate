@@ -114,6 +114,8 @@ extern struct _modeConfig modeConfig;
 #define SCS_IDLE    4   // session active, waiting for command
 #define SCS_COMMAND 5   // command in progress
 
+#define SC_RX_BUFFER_SIZE 128
+
 struct sc_state_t {
     unsigned session :4; // session state, use SCS_* defines
     unsigned note_overflow  :1;
@@ -127,8 +129,11 @@ struct sc_state_t {
     unsigned int  reset_ack;    // tick count when device set IO high, <=200
     unsigned long reset_end;    // tick count when host released RST
 
-    unsigned char atr[ 32 ];
-    unsigned int write_ptr;
+    struct {
+        unsigned char buffer[ SC_RX_BUFFER_SIZE ];
+        size_t read;
+        size_t write;
+    } rx;
 } sc_state;
 
 
@@ -298,7 +303,8 @@ inline void sc_transition (unsigned new_state) {
             break;
 
         case SCS_ATR:
-            sc_state.write_ptr  = 0;
+            sc_state.rx.read    = 0;
+            sc_state.rx.write   = 0;
             ISR_U2RX            = isr_rx_atr;
             IEC1bits.U2RXIE     = 1;
             U2MODEbits.UARTEN   = 1;
@@ -403,10 +409,9 @@ void ISR_RT isr_rx_atr (void) {
     sc_profile( "> isr_rx_atr" );
     IFS1bits.U2RXIF = 0;
 
-    if (sc_state.write_ptr < 32) {
-        sc_state.atr[ sc_state.write_ptr ] = U2RXREG;
-        sc_state.write_ptr++;
-    }
+    // TODO: check errors, do... something with them
+    sc_state.rx.buffer[ sc_state.rx.write++ ] = U2RXREG;
+    sc_state.rx.write %= SC_RX_BUFFER_SIZE;
 
     sc_profile( "< isr_rx_atr" );
 }
@@ -595,9 +600,6 @@ void ISO7816stop (void) {
     sc_transition( SCS_MANUAL );
     modeConfig.periodicService = 0;
 
-    // show ATR
-    bpWhexdump( sc_state.atr, 32 );
-
     // stop profiling counter
     T4CONbits.TON = 0;
 
@@ -671,6 +673,13 @@ unsigned int ISO7816periodic (void) {
     if (sc_state.note_overflow) {
         bpWline( "!!! notification buffer overflowed" );
         sc_state.note_overflow = 0;
+    }
+
+    while (sc_state.rx.read != sc_state.rx.write) {
+        bpWstring( "read " );
+        bpWbyte( sc_state.rx.buffer[ sc_state.rx.read++ ] );
+        sc_state.rx.read %= SC_RX_BUFFER_SIZE;
+        bpWline("");
     }
 
     return 0;
