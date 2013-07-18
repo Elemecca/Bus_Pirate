@@ -423,7 +423,7 @@ void ISO7816setup (void) {
     RPINR3bits.T2CKR    = SC_CLK_RPIN;  // connect clock input to CLK
     ISR_T2              = isr_t2_roll;  // set up rollover interrupt handler
     IFS0bits.T2IF       = 0;            // clear interupt flag
-    IPC1bits.T2IP       = 5;            // high priority, rolls over quickly
+    IPC1bits.T2IP       = 7;            // rollover count must be accurate
     IEC0bits.T2IE       = 1;            // enable interrupt
 
     // set up Timer 3 as timer
@@ -431,7 +431,7 @@ void ISO7816setup (void) {
     PR3                 = 0xFFFF;       // maximum period; don't restart early
     ISR_T3              = isr_t3_roll;  // set up rollover interrupt handler
     IFS0bits.T3IF       = 0;            // clear interrupt flag
-    IPC2bits.T3IP       = 6;            // high priority, rolls over quickly
+    IPC2bits.T3IP       = 7;            // rollover count must be accurate
     IEC0bits.T3IE       = 1;            // enable interrupt
 
     // set up Input Capture 1 to detect clock start
