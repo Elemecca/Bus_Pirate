@@ -28,7 +28,6 @@
  *   IC1    detects application of clock to CLK
  *   IC2    detects significant events on HRST
  *   IC3    detects significant events on HIO
- *   OC1    handles timing of clock rate measurements
  *   SPI1   generates clock signal for host mode
  *
  * It would be much better if we could use 32-bit timers, but we need to
@@ -51,9 +50,7 @@
  *       - detected by IC3, notify user of timing
  *     - host releases HRST high at or after 400t from clock start
  *       - detected by IC2, notify user of timing
- *       - set OC1 to trigger in 300t
- *     - calculate data rate 300t after HRST goes high
- *       - triggered by OC1
+ *       - calculate data rate
  *       - transition to SCS_ATR
  *   - SCS_ATR: device sends answer to reset
  *     - U2 is listening on HIO
@@ -348,33 +345,13 @@ void ISR_RT isr_ack_rst (void) {
 void ISR_RT isr_end_rst (void) {
     sc_profile( "> isr_end_rst" );
     IFS0bits.IC2IF = 0;
-    unsigned int ticks = IC2BUF;
 
     // this is a one-shot, disable the trigger
     IC2CONbits.ICM = 0;
 
-    // in 300 ticks run the clock rate calculation
-    OC1R = (ticks + 300) % PR2;
-    OC1CONbits.OCM = 1;
-
-    // save the tick count when reset ended
-    sc_state.reset_end = ticks + (long)sc_state.mult_t2 * PR2;
-
-    sc_notify( SCM_RESET_END );
-
-    sc_profile( "< isr_end_rst" );
-}
-
-void ISR_RT isr_rate (void) {
-    sc_profile( "> isr_rate" );
-    IFS0bits.OC1IF = 0;
-
     // make sure we get the values as close together as possible
-    unsigned long cycles  = TMR3;
-    unsigned long ticks   = TMR2;
-
-    // this is currently a one-shot, disable the trigger
-    OC1CONbits.OCM = 0;
+    unsigned long cycles = TMR3;
+    unsigned long ticks  = TMR2;
 
     // compensate for timer rollver
     cycles += (long)sc_state.mult_t3 * PR3;
@@ -384,16 +361,25 @@ void ISR_RT isr_rate (void) {
     cycles -= sc_state.rate_cycles;
 
     // I don't like doing floating-point math in an ISR but we need this value
-    // 320 - 1600 cycles after the interrupt, depending on the bus clock rate.
+    // 400 ticks (1280 - 6400 cycles depending on the bus clock rate) after
+    // reset is released and the computation takes about 1100 cycles.
     U2BRG = (int)( 93.0 * (double)cycles / (double)ticks + 1.0 );
+
+    sc_profile( "* BRG set" );
 
     sc_state.rate_cycles = cycles;
     sc_state.rate_ticks  = ticks;
 
+
+    // save the tick count when reset ended
+    sc_state.reset_end = IC2BUF + (long)sc_state.mult_t2 * PR2;
+
+    
+    sc_notify( SCM_RESET_END );
     sc_notify( SCM_CLK_RATE );
     sc_transition( SCS_ATR );
 
-    sc_profile( "< isr_rate" );
+    sc_profile( "< isr_end_rst" );
 }
 
 void ISR_RT isr_t2_roll (void) {
@@ -474,15 +460,6 @@ void ISO7816setup (void) {
     IPC9bits.IC3IP      = 4;                // medium priority
     IEC2bits.IC3IE      = 1;                // enable interrupts
 
-    // set up Output Compare 1 to interupt at end of rate measurement period
-    OC1CON              = 0;                // reset the module
-    OC1CONbits.OCTSEL   = 0;                // use Timer 2
-    OC1R                = 700;              // trigger after 700 ticks
-    ISR_OC1             = isr_rate;         // set the ISR
-    IFS0bits.OC1IF      = 0;                // clear the interrupt flag
-    IPC0bits.OC1IP      = 7;                // every cycle counts, max priority
-    IEC0bits.OC1IE      = 1;                // enable interrupts
-
     // set up Timer 4/5 as 32-bit cycle counter for profiling
     T4CON               = 0;                // reset T4
     T5CON               = 0;                // reset T5
@@ -522,13 +499,6 @@ void ISO7816cleanup (void) {
     IFS2bits.IC3IF      = 0;        // "
     IPC9bits.IC3IP      = 0;        // "
     ISR_IC3             = NULL_ISR; // "
-
-    // shut down Output Compare 1
-    OC1CON              = 0;        // reset the module
-    IEC0bits.OC1IE      = 0;        // disable interrupt
-    IFS0bits.OC1IF      = 0;        // "
-    IPC0bits.OC1IP      = 0;        // "
-    ISR_OC1             = NULL_ISR; // "
 
     // disconnect timer 2 from CLK
     IEC0bits.T2IE       = 0;        // disable interrupt
