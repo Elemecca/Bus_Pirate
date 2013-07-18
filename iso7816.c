@@ -66,6 +66,8 @@
 #include <stdio.h> // for sprintf
 #include "interrupts.h"
 
+#include "iso7816/private.h"
+
 //////////////////////////////////////////////////////////////////////
 // Device Pin Mappings                                              //
 //////////////////////////////////////////////////////////////////////
@@ -105,79 +107,22 @@
 
 extern struct _modeConfig modeConfig;
 
-// session state values
-// enums aren't allowed in bitfields, so use defines
-#define SCS_MANUAL  0   // automatic operation is disabled
-#define SCS_OFFLINE 1   // no session is active, the hardware is disconnected
-#define SCS_RESET   2   // host has initiated reset
-#define SCS_ATR     3   // device is sending ATR
-#define SCS_IDLE    4   // session active, waiting for command
-#define SCS_COMMAND 5   // command in progress
+struct sc_state_t sc_state;
 
-#define SC_RX_BUFFER_SIZE 128
-
-struct sc_state_t {
-    unsigned session :4; // session state, use SCS_* defines
-    unsigned note_overflow  :1;
-
-    unsigned int mult_t2;   // rollover multiplier for Timer 2
-    unsigned int mult_t3;   // rollover multiplier for Timer 3
-
-    unsigned long rate_ticks;
-    unsigned long rate_cycles;
-
-    unsigned int  reset_ack;    // tick count when device set IO high, <=200
-    unsigned long reset_end;    // tick count when host released RST
-
-    struct {
-        unsigned char buffer[ SC_RX_BUFFER_SIZE ];
-        size_t read;
-        size_t write;
-    } rx;
-} sc_state;
-
-
-#define SCM_CLK_START       1   // clock signal detected
-#define SCM_CLK_RATE        2   // new clock rate calculated
-#define SCM_RESET_ACK       3   // device acknowledged reset by setting IO high
-#define SCM_RESET_END       4   // host released HRST
-
-#define SC_NOTIFY_BUFFER_SIZE 32
-struct sc_notes_t {
-    unsigned short read;
-    unsigned short write;
-    unsigned short buffer[ SC_NOTIFY_BUFFER_SIZE ];
-} sc_notes;
-
-inline void sc_notify (unsigned short message) {
+void sc_notify (unsigned short message) {
     if (sc_state.note_overflow) return;
 
-    register short next = (sc_notes.write + 1) % SC_NOTIFY_BUFFER_SIZE;
-    if (next == sc_notes.read) {
+    register short next = (sc_state.notes.write + 1) % SC_NOTIFY_BUFFER_SIZE;
+    if (next == sc_state.notes.read) {
         sc_state.note_overflow = 1;
     } else {
-        sc_notes.buffer[ sc_notes.write ] = message;
-        sc_notes.write = next;
+        sc_state.notes.buffer[ sc_state.notes.write ] = message;
+        sc_state.notes.write = next;
     }
 }
 
-#ifdef SC_PROF_ENABLE
-    #define SC_PROF_LENGTH 128
-    struct sc_prof_t {
-        unsigned long time;
-        const char *event;
-    } sc_prof[ SC_PROF_LENGTH ];
-
-    unsigned sc_prof_idx;
-
-    inline void sc_profile (const char *event) {
-        if (sc_prof_idx >= SC_PROF_LENGTH) return;
-        sc_prof[ sc_prof_idx ].time = TMR4 | ((long)TMR5HLD << 16);
-        sc_prof[ sc_prof_idx ].event = event;
-        sc_prof_idx++;
-    }
-#else
-    #define sc_profile(message)
+#ifdef SC_PROF_ENABLED
+struct sc_prof_t sc_prof[ SC_PROF_LENGTH ];
 #endif
 
 //////////////////////////////////////////////////////////////////////
@@ -587,7 +532,6 @@ void ISO7816start (void) {
     } else {
         // reset the state structures
         memset( &sc_state, 0, sizeof( struct sc_state_t ) );
-        memset( &sc_notes, 0, sizeof( struct sc_notes_t ) );
 
 #ifdef SC_PROF_ENABLE
         sc_prof_idx = 0;
@@ -636,8 +580,8 @@ void ISO7816stop (void) {
 
 unsigned int ISO7816periodic (void) {
     // check for async notifications
-    while (sc_notes.read != sc_notes.write) {
-        switch (sc_notes.buffer[ sc_notes.read ]) {
+    while (sc_state.notes.read != sc_state.notes.write) {
+        switch (sc_state.notes.buffer[ sc_state.notes.read ]) {
             case SCM_CLK_START:
                 bpWstring( "** bus clock started, begin cold reset, t3: " );
                 bpWlongdec( sc_state.rate_cycles );
@@ -674,11 +618,11 @@ unsigned int ISO7816periodic (void) {
 
             default:
                 bpWstring( "!!! received unknown notification " );
-                bpWhex( sc_notes.buffer[ sc_notes.read ] );
+                bpWhex( sc_state.notes.buffer[ sc_state.notes.read ] );
                 bpWline("");
                 break;
         }
-        sc_notes.read = (sc_notes.read + 1) % SC_NOTIFY_BUFFER_SIZE;
+        sc_state.notes.read = (sc_state.notes.read + 1) % SC_NOTIFY_BUFFER_SIZE;
     }
 
     if (sc_state.note_overflow) {
