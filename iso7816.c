@@ -161,21 +161,24 @@ inline void sc_notify (unsigned short message) {
     }
 }
 
+#ifdef SC_PROF_ENABLE
+    #define SC_PROF_LENGTH 128
+    struct sc_prof_t {
+        unsigned long time;
+        const char *event;
+    } sc_prof[ SC_PROF_LENGTH ];
 
-#define SC_PROF_LENGTH 128
-struct sc_prof_t {
-    unsigned long time;
-    const char *event;
-} sc_prof[ SC_PROF_LENGTH ];
+    unsigned sc_prof_idx;
 
-unsigned sc_prof_idx;
-
-inline void sc_profile (const char *event) {
-    if (sc_prof_idx >= SC_PROF_LENGTH) return;
-    sc_prof[ sc_prof_idx ].time = TMR4 | ((long)TMR5HLD << 16);
-    sc_prof[ sc_prof_idx ].event = event;
-    sc_prof_idx++;
-}
+    inline void sc_profile (const char *event) {
+        if (sc_prof_idx >= SC_PROF_LENGTH) return;
+        sc_prof[ sc_prof_idx ].time = TMR4 | ((long)TMR5HLD << 16);
+        sc_prof[ sc_prof_idx ].event = event;
+        sc_prof_idx++;
+    }
+#else
+    #define sc_profile(message)
+#endif
 
 //////////////////////////////////////////////////////////////////////
 // Clock Generator                                                  //
@@ -486,6 +489,7 @@ void ISO7816setup (void) {
     IPC9bits.IC3IP      = 4;                // medium priority
     IEC2bits.IC3IE      = 1;                // enable interrupts
 
+#ifdef SC_PROF_ENABLE
     // set up Timer 4/5 as 32-bit cycle counter for profiling
     T4CON               = 0;                // reset T4
     T5CON               = 0;                // reset T5
@@ -497,7 +501,7 @@ void ISO7816setup (void) {
     IFS1bits.T5IF       = 0;                // disable interrupts
     IPC7bits.T5IP       = 0;                // "
     IEC1bits.T5IE       = 0;                // "
-
+#endif
 }
 
 void ISO7816cleanup (void) {
@@ -553,11 +557,13 @@ void ISO7816cleanup (void) {
     IFS1bits.U2RXIF     = 0;        // "
     IPC7bits.U2RXIP     = 0;        // "
 
+#ifdef SC_PROF_ENABLE
     // clean up Timer 4/5
     T4CON               = 0;
     T5CON               = 0;
     TMR4                = 0;
     TMR5                = 0;
+#endif
 
     // reset IO pins
     SC_HRST_DIR     = 1;
@@ -582,12 +588,15 @@ void ISO7816start (void) {
         // reset the state structures
         memset( &sc_state, 0, sizeof( struct sc_state_t ) );
         memset( &sc_notes, 0, sizeof( struct sc_notes_t ) );
+
+#ifdef SC_PROF_ENABLE
         sc_prof_idx = 0;
 
         // start profiling counter
         TMR5            = 0;    // reset the timer value
         TMR4            = 0;    // "
         T4CONbits.TON   = 1;    // start the timer
+#endif
         
         sc_transition( SCS_OFFLINE );
         modeConfig.periodicService = 1;
@@ -600,14 +609,15 @@ void ISO7816stop (void) {
     sc_transition( SCS_MANUAL );
     modeConfig.periodicService = 0;
 
-    // stop profiling counter
-    T4CONbits.TON = 0;
-
     bpWstring( "t2: " );
     bpWintdec( sc_state.mult_t2 );
     bpWstring( ", t3: " );
     bpWintdec( sc_state.mult_t3 );
     bpWline("");
+
+#ifdef SC_PROF_ENABLE
+    // stop profiling counter
+    T4CONbits.TON = 0;
 
     // write profiling events
     unsigned int idx;
@@ -620,6 +630,7 @@ void ISO7816stop (void) {
 
     if (sc_prof_idx >= SC_PROF_LENGTH)
         bpWline( "!!! profiling buffer overflowed" );
+#endif
 }
 
 
