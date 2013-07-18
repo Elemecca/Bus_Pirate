@@ -17,6 +17,8 @@
 #ifndef baseIO_h
 #define baseIO_h
 
+#include <stddef.h>
+
 //manage user terminal input
 unsigned int bpUserNumberPrompt(unsigned int maxBytes, unsigned int maxValue, unsigned int defValue);
 
@@ -64,6 +66,9 @@ void bpWintdec(unsigned int i);
 void bpWlongdec(unsigned long l);
 //friendly version
 void bpWlongdecf(unsigned long l);
+
+// prints a formatted hex dump of a byte buffer
+void bpWhexdump (const unsigned char buffer[], size_t length);
 
 //print an ADC measurement in decimal form
 void bpWvolts(unsigned int adc);

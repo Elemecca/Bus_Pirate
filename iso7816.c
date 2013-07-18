@@ -126,6 +126,9 @@ struct sc_state_t {
 
     unsigned int  reset_ack;    // tick count when device set IO high, <=200
     unsigned long reset_end;    // tick count when host released RST
+
+    unsigned char atr[ 32 ];
+    unsigned int write_ptr;
 } sc_state;
 
 
@@ -236,6 +239,7 @@ void scSCKEnable (int enable) {
 //////////////////////////////////////////////////////////////////////
 
 void ISR_RT isr_end_rst (void);
+void ISR_RT isr_rx_atr  (void);
 
 inline void sc_transition (unsigned new_state) {
     sc_profile( "> sc_transition" );
@@ -294,6 +298,9 @@ inline void sc_transition (unsigned new_state) {
             break;
 
         case SCS_ATR:
+            sc_state.write_ptr  = 0;
+            ISR_U2RX            = isr_rx_atr;
+            IEC1bits.U2RXIE     = 1;
             U2MODEbits.UARTEN   = 1;
             break;
     }
@@ -392,6 +399,17 @@ void ISR_RT isr_t3_roll (void) {
     sc_state.mult_t3++;
 }
 
+void ISR_RT isr_rx_atr (void) {
+    sc_profile( "> isr_rx_atr" );
+    IFS1bits.U2RXIF = 0;
+
+    if (sc_state.write_ptr < 32) {
+        sc_state.atr[ sc_state.write_ptr ] = U2RXREG;
+        sc_state.write_ptr++;
+    }
+
+    sc_profile( "< isr_rx_atr" );
+}
 
 //////////////////////////////////////////////////////////////////////
 // Mode Setup and Teardown                                          //
@@ -415,6 +433,9 @@ void ISO7816setup (void) {
     U2MODEbits.STSEL    = 1;            // 2 stop bits
     RPINR19bits.U2RXR   = SC_HIO_RPIN;  // connect pin to Rx input
     SC_HIO_RPOUT        = U2TX_IO;      // connect pin to Tx output
+    IFS1bits.U2RXIF     = 0;            // clear the interrupt flag
+    IPC7bits.U2RXIP     = 4;            // normal interrupt priority
+    IEC1bits.U2RXIE     = 0;            // disable interrupt for now
 
     // set up Timer 2 as synchronous counter on CLK
     T2CON               = 0;            // reset the timer
@@ -523,6 +544,9 @@ void ISO7816cleanup (void) {
     U2MODE              = 0;        // reset the UART
     RPINR19bits.U2RXR   = 0x1F;     // disconnect Rx input
     SC_HIO_RPOUT        = 0;        // disconnect Tx output
+    IEC1bits.U2RXIE     = 0;        // disable interrupt
+    IFS1bits.U2RXIF     = 0;        // "
+    IPC7bits.U2RXIP     = 0;        // "
 
     // clean up Timer 4/5
     T4CON               = 0;
@@ -570,6 +594,9 @@ void ISO7816stop (void) {
 
     sc_transition( SCS_MANUAL );
     modeConfig.periodicService = 0;
+
+    // show ATR
+    bpWhexdump( sc_state.atr, 32 );
 
     // stop profiling counter
     T4CONbits.TON = 0;
@@ -644,22 +671,6 @@ unsigned int ISO7816periodic (void) {
     if (sc_state.note_overflow) {
         bpWline( "!!! notification buffer overflowed" );
         sc_state.note_overflow = 0;
-    }
-
-    if (U2STAbits.URXDA) {
-        register int status = U2STA;
-
-        bpWstring( "Received " );
-        bpWbyte( U2RXREG );
-
-        if (status & 0xC) {
-            bpWstring( " p f" );
-        } else if (status & 0x8) {
-            bpWstring( " p" );
-        } else if (status & 0x4) {
-            bpWstring( "   f" );
-        }
-        bpWline("");
     }
 
     return 0;

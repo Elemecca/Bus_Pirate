@@ -235,6 +235,21 @@ void bpWinthex(unsigned int c) {
     return;
 }
 
+void bpWhexdump (const unsigned char buffer[], size_t length) {
+    size_t idx;
+    for (idx = 0; idx < length; idx++) {
+        if (idx % 8 == 0) {
+            bpWline("");
+            bpWinthex( idx );
+            UART1TX( ':' );
+        }
+
+        UART1TX( ' ' );
+        UART1TX( HEXASCII[ (buffer[ idx ] >> 4) & 0x0F ] );
+        UART1TX( HEXASCII[  buffer[ idx ] & 0x0F ] );
+    }
+    bpWline("");
+}
 
 //print an ADC measurement in decimal form
 
