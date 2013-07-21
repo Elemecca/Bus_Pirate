@@ -139,6 +139,7 @@ proto protos[MAXPROTO] = {
 	nullfunc3,				// periodic
 	nullfunc4,				// macro
 	HiZsetup,				// setup
+	HiZsetup,               // setup_exc
 	HiZcleanup,				// cleanup
 	HiZpins,				// pins
 	HiZsettings,			// HiZ doesn't have settings
@@ -162,6 +163,7 @@ proto protos[MAXPROTO] = {
 	nullfunc3,				// periodic
 	OWmacro,				// macro
 	OWsetup,				// setup
+	OWsetup,           // setup_exc
 	HiZcleanup,				// cleanup
 	OWpins,					// pins
 	HiZsettings,			// settings
@@ -186,6 +188,7 @@ proto protos[MAXPROTO] = {
 	UARTperiodic,			// periodic
 	UARTmacro,				// macro
 	UARTsetup,				// setup
+	UARTsetup_exc,          // setup_exc
 	UARTcleanup,			// cleanup
 	UARTpins,
 	UARTsettings,
@@ -197,7 +200,7 @@ proto protos[MAXPROTO] = {
 {	I2Cstart,				// start
 	I2Cstart,				// startR
 	I2Cstop,				// stop
-	nullfunc1,				// stopR
+	I2Cstop,				// stopR
 	I2Cwrite,				// send
 	I2Cread,				// read
 	nullfunc1,				// clkh
@@ -210,6 +213,7 @@ proto protos[MAXPROTO] = {
 	nullfunc3,				// periodic
 	I2Cmacro,				// macro
 	I2Csetup,				// setup
+	I2Csetup_exc,        // setup_exc
 	I2Ccleanup,				// cleanup
 	I2Cpins,
 	I2Csettings,
@@ -234,6 +238,7 @@ proto protos[MAXPROTO] = {
 	nullfunc3,				// periodic
 	SPImacro,				// macro
 	SPIsetup,				// setup
+	SPIsetup_exc,        // setup_exc
 	SPIcleanup,				// cleanup
 	SPIpins,
 	SPIsettings,
@@ -258,6 +263,7 @@ proto protos[MAXPROTO] = {
 	nullfunc3,				// periodic
 	R2Wmacro,				// macro
 	R2Wsetup,				// setup
+	R2Wsetup_exc,        // setup_exc
 	HiZcleanup,				// cleanup
 	R2Wpins,
 	R2Wsettings,
@@ -282,6 +288,7 @@ proto protos[MAXPROTO] = {
 	nullfunc3,				// periodic
 	nullfunc4,				// macro
 	R3Wsetup,				// setup
+	R3Wsetup_exc,        // setup_exc
 	HiZcleanup,				// cleanup
 	R3Wpins,
 	R3Wsettings,
@@ -306,6 +313,7 @@ proto protos[MAXPROTO] = {
 	nullfunc3,				// periodic
 	KEYBmacro,				// macro
 	KEYBsetup,				// setup
+	KEYBsetup_exc,       // setup_exc
 	HiZcleanup,				// cleanup
 	HiZpins,
 	HiZsettings,
@@ -330,6 +338,7 @@ proto protos[MAXPROTO] = {
 	nullfunc3, 				// periodic
 	LCDmacro,				// macro
 	LCDsetup,				// setup
+	LCDsetup_exc,        // setup_exc
 	spiDisable,				// cleanup
 	LCDpins,
 	HiZsettings,
@@ -353,7 +362,8 @@ proto protos[MAXPROTO] = {
 	nullfunc3,				// bitr
 	nullfunc3, 				// periodic
 	picmacro,				// macro
-	picinit,				// setup
+	picinit,				   // setup
+	picinit_exc,         // setup_exc
 	piccleanup,				// cleanup
 	picpins,
 	HiZsettings,
@@ -378,6 +388,7 @@ proto protos[MAXPROTO] = {
 	nullfunc3,				// periodic
 	nullfunc4,				// macro
 	DIOsetup,				// setup
+	DIOsetup_exc,        // setup_exc
 	HiZcleanup,				// cleanup
 	HiZpins,
 	HiZsettings,

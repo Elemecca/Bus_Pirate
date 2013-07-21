@@ -37,6 +37,7 @@ unsigned char i2cinternal = 0;
 extern struct _bpConfig bpConfig; //holds persistant bus pirate settings (see base.h) need hardware version info
 extern struct _modeConfig modeConfig;
 extern struct _command bpCommand;
+
 /*
 static struct _i2csniff {
         unsigned char bits;
@@ -63,6 +64,7 @@ static unsigned char I2Cspeed[] = {157, 37, 13}; //100,400,1000khz; datasheet pg
 
 //software functions
 void I2C_Setup(void);
+void I2Csetup_exc(void);
 void I2C_SnifferSetup(void);
 void I2C_Sniffer(unsigned char termMode);
 
@@ -286,21 +288,25 @@ void I2Csetup(void) {
 
     //set the options avaiable here....
     modeConfig.HiZ = 1; //yes, always hiz
-
-    if (i2cmode == SOFT) {
-        SDA_TRIS = 1;
-        SCL_TRIS = 1;
-        SCL = 0; //B8 scl
-        SDA = 0; //B9 sda
-        bbSetup(2, modeConfig.speed); //configure the bitbang library for 2-wire, set the speed
-    }
-#ifdef BP_USE_I2C_HW
-    else {
-        hwi2cSetup();
-    }
-#endif
 }
 
+void I2Csetup_exc(void) //Executes the setup.. controlled with 'P' command
+{
+   if (i2cmode == SOFT) {
+       SDA_TRIS = 1;
+       SCL_TRIS = 1;
+       SCL = 0; //B8 scl
+       SDA = 0; //B9 sda
+       bbSetup(2, modeConfig.speed); //configure the bitbang library for 2-wire, set the speed
+   }
+#ifdef BP_USE_I2C_HW
+   else {
+       hwi2cSetup();
+   }
+#endif   
+}
+
+   
 void I2Ccleanup(void) {
     ackPending = 0; //clear any pending ACK from previous use
     if (i2cmode == HARD) {
@@ -392,7 +398,7 @@ void I2Cmacro(unsigned int c) {
 #endif
             break;
 #if defined (BUSPIRATEV4)
-        case 3: //in hardware mode (or software, I guess) we can edit the on-board EEPROM
+        case 3: //in hardware mode (or software, I guess) we can edit the on-board EEPROM -software mode unimplemented...
             bpWline("Now using on-board EEPROM I2C interface");
             i2cinternal = 1;
             I2C1CONbits.A10M = 0;
@@ -815,6 +821,7 @@ void binI2C(void) {
     SCL_TRIS = 1;
     SCL = 0; //B8 scl
     SDA = 0; //B9 sda
+	
 
     //set CS pin direction to output on setup
     BP_CS_DIR = 0; //B6 cs output
@@ -826,7 +833,7 @@ void binI2C(void) {
 
     while (1) {
 
-        while (UART1RXRdy == 0); //wait for a byte
+        //JTR Not requiredwhile (UART1RXRdy == 0); //wait for a byte
         inByte = UART1RX();
         rawCommand = (inByte >> 4); //get command bits in seperate variable
 
@@ -861,20 +868,20 @@ void binI2C(void) {
                         break;
                     case 8: //write-then-read
                         //get the number of commands that will follow
-                        while (!UART1RXRdy()); //wait for a byte
+                        //JTR Not required while (!UART1RXRdy()); //wait for a byte
                         fw = UART1RX();
                         /* JTR usb port; */; //get byte
                         fw = fw << 8;
-                        while (!UART1RXRdy()); //wait for a byte
+                        //JTR Not required while (!UART1RXRdy()); //wait for a byte
                         fw |= UART1RX();
                         /* JTR usb port; */; //get byte
 
                         //get the number of reads to do
-                        while (!UART1RXRdy()); //wait for a byte
+                        //JTR Not required while (!UART1RXRdy()); //wait for a byte
                         fr = UART1RX();
                         /* JTR usb port; */; //get byte
                         fr = fr << 8;
-                        while (!UART1RXRdy()); //wait for a byte
+                        //JTR Not required while (!UART1RXRdy()); //wait for a byte
                         fr |= UART1RX();
                         /* JTR usb port; */; //get byte
 
@@ -888,7 +895,7 @@ I2C_write_read_error: //use this for the read error too
 
                         //get bytes
                         for (j = 0; j < fw; j++) {
-                            while (!UART1RXRdy()); //wait for a byte
+                            //JTR Not required while (!UART1RXRdy()); //wait for a byte
                             bpConfig.terminalInput[j] = UART1RX();
                             /* JTR usb port; */;
                         }
@@ -979,7 +986,7 @@ I2C_write_read_error: //use this for the read error too
                 UART1TX(1); //send 1/OK
 
                 for (i = 0; i < inByte; i++) {
-                    while (UART1RXRdy() == 0); //wait for a byte
+                    //JTR Not required while (UART1RXRdy() == 0); //wait for a byte
                     bbWriteByte(UART1RX()); // JTR usb port //send byte
                     UART1TX(bbReadBit()); //return ACK0 or NACK1
                 }
@@ -996,7 +1003,11 @@ I2C_write_read_error: //use this for the read error too
                 binIOperipheralset(inByte);
                 UART1TX(1); //send 1/OK
                 break;
-
+#ifdef BUSPIRATEV4
+            case 0b0101:
+                UART1TX(binBBpullVoltage(inByte));
+                break;
+#endif
             default:
                 UART1TX(0x00); //send 0/Error
                 break;

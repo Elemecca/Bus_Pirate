@@ -17,6 +17,8 @@
 #define BP_VERSION_STRING "Bus Pirate v3"// (Seeed Studio)"
 #define BP_VERSION "v3"
 
+#define NUM_OF_SUMP_CHANNELS 5
+
 //set the pin to use for POST detection
 #define BP_POST 	PORTBbits.RB0
 #define BP_POST_DIR TRISBbits.TRISB0
@@ -45,7 +47,7 @@
 #define BP_CLK 			PORTBbits.RB8
 #define BP_MISO 		PORTBbits.RB7
 #define BP_CS 			PORTBbits.RB6
-#define BP_AUX 			PORTBbits.RB10 //moved pin5 (AUX) to RB10
+#define BP_AUX0 			PORTBbits.RB10 //moved pin5 (AUX) to RB10
 #define BP_LEDMODE		PORTAbits.RA1 //single MODE led on v2a
 #define BP_VREGEN		PORTAbits.RA0 //single vreg enable pin on v2a
 #define BP_PULLUP		PORTBbits.RB11 //Pull-up pin on V2a
@@ -57,7 +59,7 @@
 #define BP_CLK_DIR 		TRISBbits.TRISB8
 #define BP_MISO_DIR 	TRISBbits.TRISB7
 #define BP_CS_DIR 		TRISBbits.TRISB6
-#define BP_AUX_DIR 		TRISBbits.TRISB10
+#define BP_AUX0_DIR 		TRISBbits.TRISB10
 #define BP_LEDMODE_DIR	TRISAbits.TRISA1
 #define BP_VREGEN_DIR	TRISAbits.TRISA0
 #define BP_PULLUP_DIR	TRISBbits.TRISB11
@@ -68,7 +70,7 @@
 #define BP_CLK_ODC 		ODCBbits.ODB8
 #define BP_MISO_ODC 	ODCBbits.ODB7
 #define BP_CS_ODC 		ODCBbits.ODB6
-#define BP_AUX_ODC 		ODCBbits.ODB10
+#define BP_AUX0_ODC 		ODCBbits.ODB10
 
 //Change notice assignment
 #define BP_MOSI_CN		CNEN2bits.CN21IE

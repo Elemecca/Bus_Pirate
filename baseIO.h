@@ -118,6 +118,7 @@ unsigned char CheckCommsError(void);
 void UART1Speed(unsigned char brg);
 //Initialize the terminal UART for the speed currently set in bpConfig.termSpeed
 void InitializeUART1(void);
+unsigned char UART1TXRdy(void);
 //
 //
 // Ring buffer for UART
@@ -133,35 +134,11 @@ void bpWhexBuf(unsigned int c); //write a hex value to ring buffer
 unsigned char USBUSARTIsTxTrfReady(void);
 //void putUSBUSART(char *data, unsigned char length);
 
-
 //
 // Hardware functions and definitions
 //
 // Read the lower 16 bits from programming flash memory
 unsigned int bpReadFlash(unsigned int page, unsigned int addr);
 
-#ifdef BUSPIRATEV4
-BYTE getsUSBUSART(BYTE* buffer, BYTE len);
-//putUSBUSART(unsigned char* buffer), BYTE len))
-
-unsigned char usbbufgetbyte(unsigned char *c);
-unsigned char PEEKusbbufgetbyte(unsigned char *c);
-void usbbufflush(void);
-BYTE getsUSBUSART(BYTE* buffer, BYTE len);
-BYTE putPARTARRAYUSBUSART(BYTE *data, BYTE length);
-BYTE putFULLARRAYUSBUSART(void);
-BYTE WaitInReady(void);
-BYTE WaitOutReady(void);
-BYTE getInReady(void);
-BYTE getOutReady(void);
-BYTE getCDC_Out_ArmNext(void);
-BYTE SendCDC_In_ArmNext(BYTE count);
-void ArmCDCOutDB(void);
-void ArmCDCInDB(void);
-void DisArmCDCOutDB(void);
-void DisArmCDCInDB(void);
-void SendZLP(void);
-
-#endif
 #endif
 

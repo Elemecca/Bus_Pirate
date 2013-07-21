@@ -29,6 +29,10 @@ extern struct _modeConfig modeConfig;
 extern struct _command bpCommand;
 extern proto protos[MAXPROTO];
 
+#ifdef BUSPIRATEV4
+extern volatile BYTE cdc_Out_len;
+#endif
+
 void walkdungeon(void);
 
 void setMode(void); //change protocol/bus mode
@@ -214,14 +218,14 @@ void serviceuser(void) {
                             case 'B': // down arrow
                                 goto down;
                                 break;
-							case '1':	// VT100+ home key (example use in PuTTY)
-								c = UART1RX();
-								if(c == '~') goto home;
-								break;
-							case '4':	// VT100+ end key (example use in PuTTY)
-								c = UART1RX();
-								if(c == '~') goto end;
-								break;
+                            case '1': // VT100+ home key (example use in PuTTY)
+                                c = UART1RX();
+                                if (c == '~') goto home;
+                                break;
+                            case '4': // VT100+ end key (example use in PuTTY)
+                                c = UART1RX();
+                                if (c == '~') goto end;
+                                break;
                         }
                     }
                     break;
@@ -347,7 +351,8 @@ down:
                         } else UART1TX(BELL); // beep, top
                     }
                     break;
-home:			case 0x01: // ^A (goto begining of line)
+home:
+                    case 0x01: // ^A (goto begining of line)
                     if (tmpcmdend != cmdstart) {
                         repeat = (tmpcmdend - cmdstart) & CMDLENMSK;
                         bpWstring("\x1B["); // move left
@@ -358,7 +363,8 @@ home:			case 0x01: // ^A (goto begining of line)
                         UART1TX(BELL); // beep, at start
                     }
                     break;
-end:			case 0x05: // ^E (goto end of line)
+end:
+                    case 0x05: // ^E (goto end of line)
                     if (tmpcmdend != cmdend) {
                         repeat = (cmdend - tmpcmdend) & CMDLENMSK;
                         bpWstring("\x1B["); // move right
@@ -384,7 +390,7 @@ end:			case 0x05: // ^E (goto end of line)
                         binBB();
 #if defined (BUSPIRATEV4)
                         binmodecnt = 0; //no reset, cleanup manually 
-						goto bpv4reset; //versionInfo(); //and simulate reset for dependent apps (looking at you AVR dude!)
+                        goto bpv4reset; //versionInfo(); //and simulate reset for dependent apps (looking at you AVR dude!)
 #endif
                     }
                     break;
@@ -466,21 +472,21 @@ end:			case 0x05: // ^E (goto end of line)
         //		bpWstring(" cmdend = ");
         //		bpWinthex(cmdend);
         //		bpWline("");
-
-
+        unsigned char oldDmode=0;//temperarly holds the defaout display mode, while a differend display read is preformed
+        unsigned char newDmode=0;
         while (!stop) {
             c = cmdbuf[cmdstart];
+
             switch (c) { // generic commands (not bus specific)
-                case 'h':	//bpWline("-command history");
+                case 'h': //bpWline("-command history");
 #if defined(BP_ENABLE_HISTORY)
-                    if(!cmdhistory())
-					{	
-						oldstart=cmdstart;
-                    	newstart=cmdend;
+                    if (!cmdhistory()) {
+                        oldstart = cmdstart;
+                        newstart = cmdend;
                     }
 #endif
-                	break;
-                     
+                    break;
+
                 case '?': //bpWline("-HELP");
                     printHelp();
                     break;
@@ -644,14 +650,15 @@ end:			case 0x05: // ^E (goto end of line)
                     //if(agree())
                     //{	//bpWline(OUMSG_PM_RESET);
 #if defined(BUSPIRATEV4)
-					//bpWline("* No Software Reset on v4, Use the reset button."); //TRANSLATE-NEEDED
-					//BPMSG1113;
-					bpWstring("RESET\r\n");
-bpv4reset:			versionInfo();
-					//bpWstring("\r\nHiZ>"); //was printed twice
+                    //bpWline("* No Software Reset on v4, Use the reset button."); //TRANSLATE-NEEDED
+                    //BPMSG1113;
+                    bpWstring("RESET\r\n");
+bpv4reset:
+                    versionInfo();
+                    //bpWstring("\r\nHiZ>"); //was printed twice
 #else
                     BPMSG1093;
-                    while (UART1TXRdy == 0); //wait untill TX finishes
+                    while (0 == UART1TXRdy()); //wait untill TX finishes
                     asm("RESET");
                     //}
 #endif
@@ -661,9 +668,9 @@ bpv4reset:			versionInfo();
                         BPMSG1094;
                         bpDelayMS(100);
                         bpInit(); // turn off nasty things, cleanup first needed?
-                        while (UART1TXRdy == 0); //wait untill TX finishes
+                        while (0 == UART1TXRdy()); //wait untill TX finishes
                         asm volatile ("mov #BLJUMPADDRESS, w1 \n" //bootloader location
-                                "goto w1 \n");
+                                    "goto w1 \n");
                     }
                     break;
                 case 'a': //bpWline("-AUX low");
@@ -695,6 +702,11 @@ bpv4reset:			versionInfo();
                             BPMSG1096;
                             bpBR;
                             //modeConfig.vregEN=1;
+                            
+                            //Engaging Clutch
+                            //finishes the settup and conects the pins...
+                            protos[bpConfig.busMode].protocol_setup_exc();
+                            bpWline("Clutch engaged!!!");
                         } else {
                             BP_VREG_OFF();
                             bpWline("VREG too low, is there a short?");
@@ -708,6 +720,11 @@ bpv4reset:			versionInfo();
                     if (bpConfig.busMode == HIZ) { //bpWmessage(MSG_ERROR_MODE);
                         BPMSG1088;
                     } else {
+                        //disengaging Clutch
+                        //cleansup the protocol and HiZs the pins
+                        protos[bpConfig.busMode].protocol_cleanup();
+                        bpWline("Clutch disengaged!!!");
+                        
                         BP_VREG_OFF();
                         //bpWmessage(MSG_VREG_OFF);
                         BPMSG1097;
@@ -903,6 +920,8 @@ bpv4reset:			versionInfo();
                 case 'r': //bpWline("-Read");
                     //bpWmessage(MSG_READ);
                     BPMSG1102;
+				    //newDmode = 0;
+				    newDmode = changeReadDisplay();
                     repeat = getrepeat() + 1;
                     numbits = getnumbits();
                     if (numbits) {
@@ -910,6 +929,11 @@ bpv4reset:			versionInfo();
                         if (numbits > 8) modeConfig.int16 = 1;
                         else modeConfig.int16 = 0;
                     }
+						  if(newDmode)
+						  {
+						  		oldDmode = bpConfig.displayMode;
+								bpConfig.displayMode = newDmode-1;
+						  }
                     while (--repeat) {
                         received = protos[bpConfig.busMode].protocol_read();
                         if (modeConfig.lsbEN == 1) {//adjust bitorder
@@ -922,6 +946,11 @@ bpv4reset:			versionInfo();
                         }
                         bpSP;
                     }
+						  if(newDmode)
+						  {
+								bpConfig.displayMode = oldDmode;
+								newDmode=0;
+						  }
                     bpBR;
                     break;
                 case '/': //bpWline("-CLK hi");
@@ -1056,8 +1085,8 @@ int getint(void) // get int from user (accept decimal, hex (0x) or binairy (0b)
             }
         } else if ((cmdbuf[((cmdstart + i) & CMDLENMSK)] == 'x') || (cmdbuf[((cmdstart + i) & CMDLENMSK)] == 'X')) {
             i++;
-            while (((cmdbuf[((cmdstart + i) & CMDLENMSK)] >= 0x30) && (cmdbuf[((cmdstart + i) & CMDLENMSK)] <= 0x39)) ||   \
-				((cmdbuf[((cmdstart + i) & CMDLENMSK)] >= 'A') && (cmdbuf[((cmdstart + i) & CMDLENMSK)] <= 'F')) ||   \
+            while (((cmdbuf[((cmdstart + i) & CMDLENMSK)] >= 0x30) && (cmdbuf[((cmdstart + i) & CMDLENMSK)] <= 0x39)) ||    \
+				((cmdbuf[((cmdstart + i) & CMDLENMSK)] >= 'A') && (cmdbuf[((cmdstart + i) & CMDLENMSK)] <= 'F')) ||    \
 				((cmdbuf[((cmdstart + i) & CMDLENMSK)] >= 'a') && (cmdbuf[((cmdstart + i) & CMDLENMSK)] <= 'f'))) {
                 number <<= 4;
                 if ((cmdbuf[(cmdstart + i) & CMDLENMSK] >= 0x30) && (cmdbuf[((cmdstart + i) & CMDLENMSK)] <= 0x39)) {
@@ -1114,6 +1143,31 @@ int getnumbits(void) {
     return 0; // no numbits=0;
 } //
 
+unsigned char changeReadDisplay(void)
+{
+	if(cmdbuf[(cmdstart + 1) & CMDLENMSK] == 'x')
+	{
+		cmdstart = (cmdstart + 1) & CMDLENMSK;
+		return 1;
+	}
+	if(cmdbuf[(cmdstart + 1) & CMDLENMSK] == 'd')
+	{
+		cmdstart = (cmdstart + 1) & CMDLENMSK;
+		return 2;
+	}
+	if(cmdbuf[(cmdstart + 1) & CMDLENMSK] == 'b')
+	{
+		cmdstart = (cmdstart + 1) & CMDLENMSK;
+		return 3;
+	}
+	if(cmdbuf[(cmdstart + 1) & CMDLENMSK] == 'w')
+	{
+		cmdstart = (cmdstart + 1) & CMDLENMSK;
+		return 4;
+	}
+return 0;
+}
+
 void consumewhitechars(void) {
     while (cmdbuf[cmdstart] == 0x20) {
         cmdstart = (cmdstart + 1) & CMDLENMSK; // remove spaces
@@ -1159,10 +1213,13 @@ void changemode(void) {
             bpInit();
             bpConfig.busMode = busmode;
             protos[bpConfig.busMode].protocol_setup();
-            if (busmode) BP_LEDMODE = 1; // mode led is on when proto >0
+            bpWline("Clutch disengaged!!!");
+            if (busmode) {
+               BP_LEDMODE = 1; // mode led is on when proto >0
+               bpWline("To finish setup, start up the power supplies with command 'W'\r\n");
+            }
             //bpWmessage(MSG_READY);
             BPMSG1085;
-            ;
         }
     } else // number entered
     {
@@ -1184,54 +1241,55 @@ void changemode(void) {
 
 
 #if defined(BP_ENABLE_HISTORY)
-int cmdhistory(void)
-{	
-	int i,j,k;
 
-        int historypos[CMDHISTORY];
+int cmdhistory(void) {
+    int i, j, k;
 
-        i=1;
-        j = ( cmdstart - 1 ) & CMDLENMSK;
+    int historypos[CMDHISTORY];
 
-        while(j!=cmdstart)										// scroll through the whole buffer
-        {	if((cmdbuf[j]==0x00)&&(cmdbuf[(j+1)&CMDLENMSK]!=0x00))		// did we find an end? is it not empty?
-                {	bpWdec(i);
-                        bpWstring(". ");
-                        k=1;
-                        while(cmdbuf[((j+k)&CMDLENMSK)])
-                        {	UART1TX(cmdbuf[((j+k)&CMDLENMSK)]);	// print it
-                                k++;
-                        }
-                        historypos[i]=(j+1)&CMDLENMSK;
-                        i++;
-                        if(i==CMDHISTORY) break;
-                        bpWline("");
-                }
-                j = ( j - 1 ) & CMDLENMSK;
-        }
+    i = 1;
+    j = (cmdstart - 1) & CMDLENMSK;
 
-        bpWline(" ");
-        BPMSG1115;
-
-        j=getnumber(0, 1, i, 1);
-
-        if (j==-1 || !j) // x is -1, default is 0
+    while (j != cmdstart) // scroll through the whole buffer
+    {
+        if ((cmdbuf[j] == 0x00) && (cmdbuf[(j + 1) & CMDLENMSK] != 0x00)) // did we find an end? is it not empty?
         {
-                bpWline("");
-                return 1;
+            bpWdec(i);
+            bpWstring(". ");
+            k = 1;
+            while (cmdbuf[((j + k) & CMDLENMSK)]) {
+                UART1TX(cmdbuf[((j + k) & CMDLENMSK)]); // print it
+                k++;
+            }
+            historypos[i] = (j + 1) & CMDLENMSK;
+            i++;
+            if (i == CMDHISTORY) break;
+            bpWline("");
         }
-        else
+        j = (j - 1) & CMDLENMSK;
+    }
+
+    bpWline(" ");
+    BPMSG1115;
+
+    j = getnumber(0, 1, i, 1);
+
+    if (j == -1 || !j) // x is -1, default is 0
+    {
+        bpWline("");
+        return 1;
+    } else {
+        i = 0;
+        while (cmdbuf[(historypos[j] + i) & CMDLENMSK]) // copy it to the end of the ringbuffer
         {
-                i=0;
-                while(cmdbuf[(historypos[j]+i)&CMDLENMSK])					// copy it to the end of the ringbuffer
-                {	cmdbuf[(cmdend+i)&CMDLENMSK]=cmdbuf[(historypos[j]+i)&CMDLENMSK];
-                        i++;
-                }
-                cmdstart=(cmdend-1)&CMDLENMSK;		// start will be increased before parsing in main loop
-                cmdend=(cmdstart+i+2)&CMDLENMSK;
-                cmdbuf[(cmdend-1)&CMDLENMSK]=0x00;
+            cmdbuf[(cmdend + i) & CMDLENMSK] = cmdbuf[(historypos[j] + i) & CMDLENMSK];
+            i++;
         }
-        return 0;
+        cmdstart = (cmdend - 1) & CMDLENMSK; // start will be increased before parsing in main loop
+        cmdend = (cmdstart + i + 2) & CMDLENMSK;
+        cmdbuf[(cmdend - 1) & CMDLENMSK] = 0x00;
+    }
+    return 0;
 } //cmdhistory(void)
 #endif
 
@@ -1256,11 +1314,11 @@ again: // need to do it proper with whiles and ifs..
     neg = 0;
 
     bpWstring("\r\n(");
-	if(def<0){
-		bpWstring("x");
-	}else{
-    	bpWdec(def);
-	}
+    if (def < 0) {
+        bpWstring("x");
+    } else {
+        bpWdec(def);
+    }
     bpWstring(")>");
 
     while (!stop) {
@@ -1359,11 +1417,11 @@ again: // need to do it proper with whiles and ifs..
     neg = 0;
 
     bpWstring("\r\n(");
-	if(def<0){
-		bpWstring("x");
-	}else{
-    	bpWlongdec(def);
-	}
+    if (def < 0) {
+        bpWstring("x");
+    } else {
+        bpWlongdec(def);
+    }
     bpWstring(")>");
 
     while (!stop) {
@@ -1453,9 +1511,9 @@ void versionInfo(void) {
     bpWstring(BP_VERSION_STRING);
     UART1TX('.');
     UART1TX(bpConfig.HWversion);
-	if(bpConfig.dev_type==0x44F){//sandbox electronics clone with 44pin PIC24FJ64GA004
-    	bpWstring(" clone w/different PIC");
-	}
+    if (bpConfig.dev_type == 0x44F) {//sandbox electronics clone with 44pin PIC24FJ64GA004
+        bpWstring(" clone w/different PIC");
+    }
     bpBR;
 #else
     bpWline(BP_VERSION_STRING);
@@ -1504,11 +1562,11 @@ void versionInfo(void) {
     }
 #else
     bpWstring(" (24FJ64GA00");
-	if(bpConfig.dev_type==0x44F){//sandbox electronics clone with 44pin PIC24FJ64GA004
-    	bpWstring("4 ");
-	}else{
-    	bpWstring("2 ");
-	}
+    if (bpConfig.dev_type == 0x44F) {//sandbox electronics clone with 44pin PIC24FJ64GA004
+        bpWstring("4 ");
+    } else {
+        bpWstring("2 ");
+    }
 
     switch (bpConfig.dev_rev) {
         case PIC_REV_A3:
@@ -1532,7 +1590,7 @@ void versionInfo(void) {
     bpWline(")");
     //bpWline("http://dangerousprototypes.com");
     BPMSG1118;
-    i=0;
+    i = 0;
 } //versionInfo(void)
 
 //display properties of the current bus mode (pullups, vreg, lsb, output type, etc)
@@ -1803,14 +1861,14 @@ void setBaudRate(void) {
     //bpWmessage(MSG_OPT_TERMBAUD_ADJUST); //show 'adjust and press space dialog'
     BPMSG1134;
     BPMSG1251;
-    while (UART1TXRdy == 0); //wait for TX to finish or reinit flushes part of prompt string from buffer
+    while (0 == UART1TXRdy()); //wait for TX to finish or reinit flushes part of prompt string from buffer
 
     if (bpConfig.termSpeed == 9) {
         UART1Speed(brg);
     }
     InitializeUART1();
     while (1) { //wait for space to prove valid baud rate switch
-        while (!UART1RXRdy());
+        //JTR Not required while (!UART1RXRdy());
         if (UART1RX() == ' ')break;
     }
 } //
@@ -1859,27 +1917,27 @@ void setPullupVoltage(void) {
     }
     switch (temp) {
         case 1: BP_3V3PU_OFF();
-        	
-        	BPMSG1272; //;0;" on-board pullup voltage "
-        	BPMSG1274; //1;"disabled"
-        	
+
+            BPMSG1272; //;0;" on-board pullup voltage "
+            BPMSG1274; //1;"disabled"
+
             //bpWline("on-board pullup voltage disabled");
             break;
         case 2: BP_3V3PU_ON();
-        	BPMSG1173; //3.3v
-        	BPMSG1272; //;0;" on-board pullup voltage "
-        	BPMSG1273; //1;"enabled"
+            BPMSG1173; //3.3v
+            BPMSG1272; //;0;" on-board pullup voltage "
+            BPMSG1273; //1;"enabled"
             //bpWline("3V3 on-board pullup voltage enabled");
             break;
         case 3: BP_5VPU_ON();
-        	BPMSG1171; //5v
-        	BPMSG1272; //;0;" on-board pullup voltage "
-        	BPMSG1273; //1;"enabled"
-           //bpWline("5V on-board pullup voltage enabled");
+            BPMSG1171; //5v
+            BPMSG1272; //;0;" on-board pullup voltage "
+            BPMSG1273; //1;"enabled"
+            //bpWline("5V on-board pullup voltage enabled");
             break;
         default:BP_3V3PU_OFF();
-        	BPMSG1272; //;0;" on-board pullup voltage "
-        	BPMSG1274; //1;"disabled"
+            BPMSG1272; //;0;" on-board pullup voltage "
+            BPMSG1274; //1;"disabled"
             //bpWline("on-board pullup voltage disabled");
     }
 }

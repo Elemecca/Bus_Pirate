@@ -9,10 +9,14 @@
                      projectFiles="true">
         <itemPath>../hardwarev1a.h</itemPath>
       </logicalFolder>
+      <logicalFolder name="f1" displayName="iso7816" projectFiles="true">
+        <itemPath>../iso7816/atr.h</itemPath>
+        <itemPath>../iso7816/private.h</itemPath>
+      </logicalFolder>
       <logicalFolder name="translations"
                      displayName="translations"
                      projectFiles="true">
-        <itemPath>../translations/v3_en_US.h</itemPath>
+        <itemPath>../translations/BPv3_en_US.h</itemPath>
       </logicalFolder>
       <itemPath>../1wire.h</itemPath>
       <itemPath>../AUXpin.h</itemPath>
@@ -33,8 +37,6 @@
       <itemPath>../binwire.h</itemPath>
       <itemPath>../bitbang.h</itemPath>
       <itemPath>../busPirateCore.h</itemPath>
-      <itemPath>../cdc.h</itemPath>
-      <itemPath>../cdc_config.h</itemPath>
       <itemPath>../configWords.h</itemPath>
       <itemPath>../descriptors.h</itemPath>
       <itemPath>../dio.h</itemPath>
@@ -43,14 +45,12 @@
       <itemPath>../hardwarev4a.h</itemPath>
       <itemPath>../pc_at_keyboard.h</itemPath>
       <itemPath>../pic.h</itemPath>
-      <itemPath>../picusb.h</itemPath>
       <itemPath>../procMenu.h</itemPath>
       <itemPath>../raw2wire.h</itemPath>
       <itemPath>../raw3wire.h</itemPath>
       <itemPath>../selftest.h</itemPath>
       <itemPath>../uart2io.h</itemPath>
       <itemPath>../usb_lang.h</itemPath>
-      <itemPath>../usb_stack.h</itemPath>
       <itemPath>../1wire_lib.h</itemPath>
       <itemPath>../iso7816.h</itemPath>
       <itemPath>../interrupts.h</itemPath>
@@ -71,10 +71,13 @@
     <logicalFolder name="SourceFiles"
                    displayName="Source Files"
                    projectFiles="true">
+      <logicalFolder name="f1" displayName="iso7816" projectFiles="true">
+        <itemPath>../iso7816/atr.c</itemPath>
+      </logicalFolder>
       <logicalFolder name="translations"
                      displayName="translations"
                      projectFiles="true">
-        <itemPath>../translations/v3_en_US.s</itemPath>
+        <itemPath>../translations/BPv3_en_US.s</itemPath>
       </logicalFolder>
       <itemPath>../1wire.c</itemPath>
       <itemPath>../AUXpin.c</itemPath>
@@ -92,7 +95,6 @@
       <itemPath>../binwire.c</itemPath>
       <itemPath>../bitbang.c</itemPath>
       <itemPath>../busPirateCore.c</itemPath>
-      <itemPath>../cdc.c</itemPath>
       <itemPath>../dio.c</itemPath>
       <itemPath>../main.c</itemPath>
       <itemPath>../pc_at_keyboard.c</itemPath>
@@ -102,7 +104,6 @@
       <itemPath>../raw3wire.c</itemPath>
       <itemPath>../selftest.c</itemPath>
       <itemPath>../uart2io.c</itemPath>
-      <itemPath>../usb_stack.c</itemPath>
       <itemPath>../1wire_lib.c</itemPath>
       <itemPath>../OpenOCD.c</itemPath>
       <itemPath>../OpenOCD_asm.S</itemPath>

@@ -16,8 +16,7 @@
  *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-#include "globals.h"
-
+#include "base.h"
 #ifdef BP_USE_1WIRE
 #include "1wire_lib.h"
 #include "1wire.h"
@@ -645,6 +644,11 @@ void bin1WIRE(void){
                                 UART1TX(1);//send 1/OK          
                                 break;
 
+				#ifdef BUSPIRATEV4
+								case 0b0101:
+										UART1TX(binBBpullVoltage(inByte));
+										break;
+				#endif
                         default:
                                 UART1TX(0x00);//send 0/Error
                                 break;

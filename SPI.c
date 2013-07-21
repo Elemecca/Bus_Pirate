@@ -247,12 +247,16 @@ void SPIsetup(void) {
         SPIsettings();
     }
     modeConfig.wwr = 0;
+}
+
+void SPIsetup_exc(void)
+{
     //do SPI peripheral setup
     spiSetup(SPIspeed[modeConfig.speed]);
 
     // set cs the way the user wants
-    SPICS = spiSettings.csl;
-}
+    SPICS = spiSettings.csl; 
+} 
 
 void SPIcleanup(void) {
     spiDisable();
@@ -601,7 +605,7 @@ rawSPI mode:
  * 00000010 - Bulk Memory Read from Flash
 	
  */
-static unsigned char binSPIspeed[] = {0b00000, 0b11000, 0b11100, 0b11101, 0b00011, 0b01000, 0b10000, 0b11000}; //00=30,01=125,10=250,11=1000khz, 100=2mhz,101=2.667mhz,  110=4mhz, 111=8mhz; datasheet pg 142
+static unsigned char binSPIspeed[]={0b00000,0b11000,0b11100,0b11101,0b00011,0b01011,0b10011,0b11011}; //00=30,01=125,10=250,11=1000khz, 100=2mhz,101=2.667mhz,  110=4mhz, 111=8mhz; datasheet pg 142
 
 void binSPIversionString(void) {
     bpWstring("SPI1");
@@ -706,68 +710,74 @@ void binSPI(void) {
 
                         break;
 #ifdef AVR_EXTENDED_COMMANDS
-					case 6:	// AVR Extended Commands
-						UART1TX(1); // send 1/OK (ie, AVR Extended Commands accepted)
+                    case 6: // AVR Extended Commands
+                        UART1TX(1); // send 1/OK (ie, AVR Extended Commands accepted)
 
-						while(U1STAbits.URXDA == 0);//wait for a byte
-						inByte=U1RXREG; //grab it
+                        inByte = UART1RX(); //grab it
 
-						switch (inByte) {
-							case 0x00: // null operation, return OK
-								UART1TX(1);	// send 1/OK
-								break;
-							case 0x01: // version check
-								UART1TX(1); // send 1/OK
-								UART1TX(0x00);
-								UART1TX(0x01); // version 1
-								break;
-							case 0x02: // bulk memory read from flash
-								// read in the start address (4 bytes, MSB first)
-								saddr = 0;
-								for (j=0; j < 4; j++) {
-									while(U1STAbits.URXDA == 0);//wait for a byte
-									inByte=U1RXREG; //grab it
-									saddr = (saddr << 8) | inByte;
-								}
+                        switch (inByte) 
+                        {
+                            case 0x00: // null operation, return OK
+                                UART1TX(1); // send 1/OK
+                                break;
+                            case 0x01: // version check
+                                UART1TX(1); // send 1/OK
+                                UART1TX(0x00);
+                                UART1TX(0x01); // version 1
+                                break;
+                            case 0x02: // bulk memory read from flash
+                                // read in the start address (4 bytes, MSB first)
+                                saddr = 0;
+                                for (j = 0; j < 4; j++) 
+                                {
 
-								// read in the bytes to read (4 bytes, MSB first) [inclusive]
-								length = 0;
-								for (j=0; j < 4; j++) {
-									while(U1STAbits.URXDA == 0);//wait for a byte
-									inByte=U1RXREG; //grab it
-									length = (length << 8) | inByte;
-								}
+                                    inByte = UART1RX(); //grab it
+                                    saddr = (saddr << 8) | inByte;
+                                }
 
-								// FIXME - Can't handle pages past the first 64kb
-								if (saddr > 0xFFFF || length > 0xFFFF || (saddr+length) > 0xFFFF) {
-									UART1TX(0);
-								} else {
-									// just assume it'll work...
-									UART1TX(0x01); // send 1/OK
+                                // read in the bytes to read (4 bytes, MSB first) [inclusive]
+                                length = 0;
+                                for (j = 0; j < 4; j++) 
+                                {
 
-									for (j=saddr; length > 0; j++) {
-										// fetch low byte from this memory word
-										spiWriteByte(0x20);
-										spiWriteByte(j >> 8);
-										spiWriteByte(j & 0xFF);
-										UART1TX(spiWriteByte(0x00));  // fetch byte that was read
-										length--;
+                                    inByte = UART1RX(); //grab it
+                                    length = (length << 8) | inByte;
+                                }
 
-										if (length == 0) break;
-			
-										// fetch high byte from this memory word
-										spiWriteByte(0x28);
-										spiWriteByte(j >> 8);
-										spiWriteByte(j & 0xFF);
-										UART1TX(spiWriteByte(0x00));  // fetch byte that was read
-										length--;
-									}
-								}																
-								break;					
-							default:
-								UART1TX(0);
-								break;
-						}
+                                // FIXME - Can't handle pages past the first 64kb
+                                if (saddr > 0xFFFF || length > 0xFFFF || (saddr + length) > 0xFFFF) 
+                                {
+                                    UART1TX(0);
+                                } 
+                                else 
+                                {
+                                    // just assume it'll work...
+                                    UART1TX(0x01); // send 1/OK
+
+                                    for (j = saddr; length > 0; j++) 
+                                    {
+                                        // fetch low byte from this memory word
+                                        spiWriteByte(0x20);
+                                        spiWriteByte(j >> 8);
+                                        spiWriteByte(j & 0xFF);
+                                        UART1TX(spiWriteByte(0x00)); // fetch byte that was read
+                                        length--;
+
+                                        if (length == 0) break;
+
+                                        // fetch high byte from this memory word
+                                        spiWriteByte(0x28);
+                                        spiWriteByte(j >> 8);
+                                        spiWriteByte(j & 0xFF);
+                                        UART1TX(spiWriteByte(0x00)); // fetch byte that was read
+                                        length--;
+                                    }
+                                }
+                                break;
+                            default:
+                                UART1TX(0);
+                                break;
+                        }
 #endif
 						break;
                     default:
@@ -789,6 +799,12 @@ void binSPI(void) {
                 binIOperipheralset(inByte);
                 UART1TX(1); //send 1/OK
                 break;
+
+#ifdef BUSPIRATEV4
+				case 0b0101:
+					UART1TX(binBBpullVoltage(inByte));
+					break;
+#endif
             case 0b0110://set speed
                 inByte &= (~0b11111000); //clear command portion
                 modeConfig.speed = inByte;
