@@ -80,16 +80,27 @@ int sc_atr_read (unsigned char byte) {
                 sc_state.rx.mode = SC_ATR_TK;
                 return SC_READ_OK;
             } else {
+                sc_notify( SCM_ATR_DONE );
                 return SC_READ_DONE;
             }
         }
 
     case SC_ATR_TK:
-        return --sc_state.rx.offset > 0 ? SC_READ_OK : SC_READ_DONE;
+        if (--sc_state.rx.offset > 0) {
+            return SC_READ_OK;
+        } else {
+            sc_notify( SCM_ATR_DONE );
+            return SC_READ_DONE;
+        }
 
     default:
         // shouldn't happen, but...
         sc_notify( SCM_CONFUSED );
         return SC_READ_ABORT;
     }
+}
+
+void sc_atr_print (void) {
+    bpWstring( "raw ATR:" );
+    bpWhexdump( sc_state.atr, sc_state.atr_len );
 }

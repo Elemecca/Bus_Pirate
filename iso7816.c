@@ -200,8 +200,10 @@ void scSCKEnable (int enable) {
 // State Management and Interrupts                                  //
 //////////////////////////////////////////////////////////////////////
 
-void ISR_RT isr_end_rst (void);
-void ISR_RT isr_rx  (void);
+void ISR_RT isr_ack_rst     (void);
+void ISR_RT isr_end_rst     (void);
+void ISR_RT isr_atr_start   (void);
+void ISR_RT isr_rx          (void);
 
 inline void sc_transition (unsigned new_state) {
     sc_profile( "> sc_transition" );
@@ -251,7 +253,9 @@ inline void sc_transition (unsigned new_state) {
             T3CONbits.TON       = 1; // "
             IC1CONbits.ICM      = 3; // enable clock start detection
             IEC2bits.IC3IE      = 0; // will be re-enabled in isr_ack_rst
-            IC3CONbits.ICM      = 3; // enable reset ack detection
+
+            ISR_IC3 = isr_ack_rst;   // enable reset ack detection
+            IC3CONbits.ICM      = 3; // "
             break;
 
         case SCS_RESET:
@@ -261,13 +265,14 @@ inline void sc_transition (unsigned new_state) {
             break;
 
         case SCS_ATR:
-            sc_state.rx.read    = 0;
-            sc_state.rx.write   = 0;
             sc_state.rx.callback = sc_atr_read;
             sc_state.rx.next_state = SCS_IDLE;
             ISR_U2RX            = isr_rx;
             IEC1bits.U2RXIE     = 1;
             U2MODEbits.UARTEN   = 1;
+
+            ISR_IC3 = isr_atr_start;
+            IC3CONbits.ICM      = 2;
             break;
     }
 
@@ -353,6 +358,19 @@ void ISR_RT isr_end_rst (void) {
     sc_transition( SCS_ATR );
 
     sc_profile( "< isr_end_rst" );
+}
+
+void ISR_RT isr_atr_start (void) {
+    sc_profile( "> isr_atr_start" );
+    IFS2bits.IC3IF = 0;
+
+    sc_state.atr_start = IC3BUF + (long)sc_state.mult_t2 * PR2;
+
+    // this is a one-shot, disable the trigger
+    IC3CONbits.ICM = 0;
+
+    sc_notify( SCM_ATR_START );
+    sc_profile( "< isr_atr_start" );
 }
 
 void ISR_RT isr_t2_roll (void) {
@@ -580,9 +598,6 @@ void ISO7816stop (void) {
     bpWintdec( sc_state.mult_t3 );
     bpWline("");
 
-    bpWstring( "ATR bytes:" );
-    bpWhexdump( sc_state.atr, sc_state.atr_len );
-
 #ifdef SC_PROF_ENABLE
     // stop profiling counter
     T4CONbits.TON = 0;
@@ -615,9 +630,7 @@ unsigned int ISO7816periodic (void) {
                 break;
 
             case SCM_CLK_START:
-                bpWstring( "** bus clock started, begin cold reset, t3: " );
-                bpWlongdec( sc_state.rate_cycles );
-                bpWline( "c" );
+                bpWline( "** bus clock started, begin cold reset" );
                 break;
 
             case SCM_CLK_RATE:
@@ -648,6 +661,14 @@ unsigned int ISO7816periodic (void) {
                 bpWline( "t" );
                 break;
 
+            case SCM_ATR_START:
+                bpWstring( "** device started ATR at " );
+                bpWlongdec( sc_state.atr_start );
+                bpWstring( "t (reset + " );
+                bpWlongdec( sc_state.atr_start - sc_state.reset_end );
+                bpWline( "t)" );
+                break;
+
             case SCM_INVERSE_CODING:
                 bpWline( "!!! device uses inverse coding" );
                 break;
@@ -660,6 +681,10 @@ unsigned int ISO7816periodic (void) {
                 bpWline( "!!! invalid or unsupported value in ATR, aborting" );
                 bpWstring( "ATR received so far:" );
                 bpWhexdump( sc_state.atr, sc_state.atr_len );
+                break;
+
+            case SCM_ATR_DONE:
+                sc_atr_print();
                 break;
 
             default:

@@ -35,9 +35,11 @@
 #define SCM_CLK_RATE        2   // new clock rate calculated
 #define SCM_RESET_ACK       3   // device acknowledged reset by setting IO high
 #define SCM_RESET_END       4   // host released HRST
-#define SCM_INVERSE_CODING  5   // device uses inverse coding
-#define SCM_ATR_INVALID     6   // invalid value in ATR
-#define SCM_ATR_OVERFLOW    7   // ATR more than 32 bytes
+#define SCM_ATR_START       5   // device started ATR
+#define SCM_INVERSE_CODING  6   // device uses inverse coding
+#define SCM_ATR_INVALID     7   // invalid value in ATR
+#define SCM_ATR_OVERFLOW    8   // ATR more than 32 bytes
+#define SCM_ATR_DONE        9   // complete ATR received
 
 
 #define SC_READ_OK      -1
@@ -59,6 +61,7 @@ struct sc_state_t {
 
     unsigned int  reset_ack;    // tick count when device set IO high, <=200
     unsigned long reset_end;    // tick count when host released RST
+    unsigned long atr_start;    // tick count when device started ATR
 
     unsigned char atr[ 32 ];
     unsigned char atr_len;

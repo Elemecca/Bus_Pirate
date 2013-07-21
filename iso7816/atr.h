@@ -19,5 +19,6 @@
 #define	ATR_H
 
 int sc_atr_read (unsigned char byte);
+void sc_atr_print (void);
 
 #endif	/* ATR_H */
