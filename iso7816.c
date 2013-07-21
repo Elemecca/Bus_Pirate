@@ -67,6 +67,7 @@
 #include "interrupts.h"
 
 #include "iso7816/private.h"
+#include "iso7816/atr.h"
 
 //////////////////////////////////////////////////////////////////////
 // Device Pin Mappings                                              //
@@ -121,8 +122,16 @@ void sc_notify (unsigned short message) {
     }
 }
 
-#ifdef SC_PROF_ENABLED
+#ifdef SC_PROF_ENABLE
 struct sc_prof_t sc_prof[ SC_PROF_LENGTH ];
+unsigned sc_prof_idx;
+
+inline void sc_profile (const char *event) {
+    if (sc_prof_idx >= SC_PROF_LENGTH) return;
+    sc_prof[ sc_prof_idx ].time = TMR4 | ((long)TMR5HLD << 16);
+    sc_prof[ sc_prof_idx ].event = event;
+    sc_prof_idx++;
+}
 #endif
 
 //////////////////////////////////////////////////////////////////////
@@ -192,7 +201,7 @@ void scSCKEnable (int enable) {
 //////////////////////////////////////////////////////////////////////
 
 void ISR_RT isr_end_rst (void);
-void ISR_RT isr_rx_atr  (void);
+void ISR_RT isr_rx  (void);
 
 inline void sc_transition (unsigned new_state) {
     sc_profile( "> sc_transition" );
@@ -223,7 +232,8 @@ inline void sc_transition (unsigned new_state) {
             break;
 
         case SCS_ATR:
-            // no teardown yet
+            sc_state.rx.next_state = SCS_MANUAL;
+            U2MODEbits.UARTEN = 0;
             break;
     }
 
@@ -253,7 +263,9 @@ inline void sc_transition (unsigned new_state) {
         case SCS_ATR:
             sc_state.rx.read    = 0;
             sc_state.rx.write   = 0;
-            ISR_U2RX            = isr_rx_atr;
+            sc_state.rx.callback = sc_atr_read;
+            sc_state.rx.next_state = SCS_IDLE;
+            ISR_U2RX            = isr_rx;
             IEC1bits.U2RXIE     = 1;
             U2MODEbits.UARTEN   = 1;
             break;
@@ -353,15 +365,24 @@ void ISR_RT isr_t3_roll (void) {
     sc_state.mult_t3++;
 }
 
-void ISR_RT isr_rx_atr (void) {
-    sc_profile( "> isr_rx_atr" );
+void ISR_RT isr_rx (void) {
+    sc_profile( "> isr_rx" );
     IFS1bits.U2RXIF = 0;
 
     // TODO: check errors, do... something with them
-    sc_state.rx.buffer[ sc_state.rx.write++ ] = U2RXREG;
-    sc_state.rx.write %= SC_RX_BUFFER_SIZE;
+    switch ( sc_state.rx.callback( U2RXREG ) ) {
+        case SC_READ_ABORT:
+            sc_profile( "* SC_READ_ABORT" );
+            sc_transition( SCS_MANUAL );
+            break;
 
-    sc_profile( "< isr_rx_atr" );
+        case SC_READ_DONE:
+            sc_profile( "* SC_READ_DONE" );
+            sc_transition( sc_state.rx.next_state );
+            break;
+    }
+
+    sc_profile( "< isr_rx" );
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -559,6 +580,9 @@ void ISO7816stop (void) {
     bpWintdec( sc_state.mult_t3 );
     bpWline("");
 
+    bpWstring( "ATR bytes:" );
+    bpWhexdump( sc_state.atr, sc_state.atr_len );
+
 #ifdef SC_PROF_ENABLE
     // stop profiling counter
     T4CONbits.TON = 0;
@@ -582,6 +606,14 @@ unsigned int ISO7816periodic (void) {
     // check for async notifications
     while (sc_state.notes.read != sc_state.notes.write) {
         switch (sc_state.notes.buffer[ sc_state.notes.read ]) {
+            case SCM_CONFUSED:
+                bpWline( "  There's someone in my head, but it's not me." );
+                bpWline( "    And if the cloud bursts thunder in your ear" );
+                bpWline( "    You shout and no one seems to hear" );
+                bpWline( "  And if the band you're in starts playing different tunes" );
+                bpWline( "    I'll see you on the dark side of the moon." );
+                break;
+
             case SCM_CLK_START:
                 bpWstring( "** bus clock started, begin cold reset, t3: " );
                 bpWlongdec( sc_state.rate_cycles );
@@ -614,6 +646,20 @@ unsigned int ISO7816periodic (void) {
                 bpWstring( "** host released RST at " );
                 bpWlongdec( sc_state.reset_end );
                 bpWline( "t" );
+                break;
+
+            case SCM_INVERSE_CODING:
+                bpWline( "!!! device uses inverse coding" );
+                break;
+
+            case SCM_ATR_OVERFLOW:
+                bpWline( "!!! received more than 32 bytes for ATR" );
+                break;
+
+            case SCM_ATR_INVALID:
+                bpWline( "!!! invalid or unsupported value in ATR, aborting" );
+                bpWstring( "ATR received so far:" );
+                bpWhexdump( sc_state.atr, sc_state.atr_len );
                 break;
 
             default:

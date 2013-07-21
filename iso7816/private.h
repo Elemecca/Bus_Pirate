@@ -18,6 +18,8 @@
 #ifndef ISO7816_PRIVATE_H
 #define	ISO7816_PRIVATE_H
 
+#include "../base.h"
+
 // session state values
 // enums aren't allowed in bitfields, so use defines
 #define SCS_MANUAL  0   // automatic operation is disabled
@@ -28,11 +30,19 @@
 #define SCS_COMMAND 5   // command in progress
 
 // notification messages
+#define SCM_CONFUSED        0   // state doesn't pass sanity checks
 #define SCM_CLK_START       1   // clock signal detected
 #define SCM_CLK_RATE        2   // new clock rate calculated
 #define SCM_RESET_ACK       3   // device acknowledged reset by setting IO high
 #define SCM_RESET_END       4   // host released HRST
+#define SCM_INVERSE_CODING  5   // device uses inverse coding
+#define SCM_ATR_INVALID     6   // invalid value in ATR
+#define SCM_ATR_OVERFLOW    7   // ATR more than 32 bytes
 
+
+#define SC_READ_OK      -1
+#define SC_READ_DONE    -2
+#define SC_READ_ABORT   -3
 
 #define SC_RX_BUFFER_SIZE 128
 #define SC_NOTIFY_BUFFER_SIZE 32
@@ -50,16 +60,29 @@ struct sc_state_t {
     unsigned int  reset_ack;    // tick count when device set IO high, <=200
     unsigned long reset_end;    // tick count when host released RST
 
+    unsigned char atr[ 32 ];
+    unsigned char atr_len;
+
     struct {
+        // ring buffer used by some modes
         unsigned char buffer[ SC_RX_BUFFER_SIZE ];
-        size_t read;
-        size_t write;
+        unsigned char read;
+        unsigned char write;
+
+        // private state for modes' use
+        unsigned char mode;
+        unsigned char offset;
+
+        // function to be called when a byte is read
+        int (*callback) (unsigned char byte);
+
+        unsigned char next_state;
     } rx;
 
     struct {
-        unsigned short buffer[ SC_NOTIFY_BUFFER_SIZE ];
-        size_t read;
-        size_t write;
+        unsigned char buffer[ SC_NOTIFY_BUFFER_SIZE ];
+        unsigned char read;
+        unsigned char write;
     } notes;
 };
 
@@ -76,14 +99,9 @@ void sc_notify (unsigned short message);
     };
 
     extern struct sc_prof_t sc_prof[ SC_PROF_LENGTH ];
-    unsigned sc_prof_idx;
+    extern unsigned sc_prof_idx;
 
-    inline void sc_profile (const char *event) {
-        if (sc_prof_idx >= SC_PROF_LENGTH) return;
-        sc_prof[ sc_prof_idx ].time = TMR4 | ((long)TMR5HLD << 16);
-        sc_prof[ sc_prof_idx ].event = event;
-        sc_prof_idx++;
-    }
+    inline void sc_profile (const char *event);
 #else
     #define sc_profile(message)
 #endif
